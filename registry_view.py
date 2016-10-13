@@ -2,11 +2,11 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.0 by Ricardo Branco
+# v1.1 by Ricardo Branco
 #
 # MIT License
 
-import json, os, re, string, subprocess, sys
+import base64, json, os, re, string, subprocess, sys
 
 import pycurl
 
@@ -36,7 +36,7 @@ if not re.match("https?://", registry):
 		registry = "https://"+registry
 
 # Support HTTP Basic Authentication
-auth=""
+userpwd=""
 try:
 	f = open(os.path.expanduser("~/.docker/config.json"), "r")
 	hostname = re.sub("https?://", "", registry)
@@ -44,7 +44,7 @@ try:
 		data = json.load(f)
 		auth = data['auths'][hostname]['auth']
 		if auth != "":
-			auth = "Authorization: Basic " + auth
+			userpwd = base64.b64decode(auth).decode('iso-8859-1')
 	except:
 		pass
 	f.close()
@@ -57,15 +57,28 @@ debug = os.environ.get('DEBUG')
 if debug != None:
 	c.setopt(c.VERBOSE, 1)
 
+if userpwd != "":
+	c.setopt(c.USERPWD, userpwd)
+
 def curl(url, headers=[]):
 	buffer = BytesIO()
 	c.setopt(c.URL, registry + url)
 	c.setopt(c.WRITEDATA, buffer)
-	c.setopt(c.HTTPHEADER, [auth] + headers)
+	c.setopt(c.HTTPHEADER, headers)
 	c.perform()
 	body = buffer.getvalue()
 	buffer.close()
 	return body.decode('iso-8859-1')
+
+def check_registry():
+	if curl("/v2/") != "{}":
+		http_code = c.getinfo(pycurl.HTTP_CODE)
+		if http_code == 401:
+			sys.exit("ERROR: HTTP/1.1 401 Unauthorized")
+		elif http_code == 404:
+			sys.exit("ERROR: Invalid v2 Docker Registry: " + sys.argv[1])
+		else:
+			sys.exit("ERROR: HTTP " + str(http_code))
 
 def get_repos():
 	data = json.loads(curl("/v2/_catalog"))
@@ -104,8 +117,7 @@ def parse_date(ts):
 
 	return s[:-4] + tz + s[-5:]
 
-if curl("/v2/") != "{}":
-	sys.exit("ERROR: Invalid v2 registry: " + registry)
+check_registry()
 
 # XXX: Unix only
 columns = int(subprocess.check_output(['stty', 'size']).split()[1])
