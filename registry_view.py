@@ -20,7 +20,7 @@ except ImportError:
     from StringIO import StringIO as BytesIO
 
 progname = os.path.basename(sys.argv[0])
-usage = "Usage: " + progname + " REGISTRY"
+usage = "Usage: " + progname + " REGISTRY[:PORT]"
 
 if len(sys.argv) < 2:
 	sys.exit(usage)
