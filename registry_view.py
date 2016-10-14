@@ -57,7 +57,7 @@ registry = args[0].rstrip("/")
 
 # Add scheme, if absent
 if not re.match("https?://", registry):
-	if re.search("5000$", registry):
+	if registry[-5:] == ":5000":
 		registry = "http://"+registry
 	else:
 		registry = "https://"+registry
@@ -126,7 +126,6 @@ def get_info(repo, tag):
 def get_id(repo, tag):
 	data = json.loads(curl("/v2/"+repo+"/manifests/"+tag, ["Accept: application/vnd.docker.distribution.manifest.v2+json"]))
 	digest = data['config']['digest'].replace('sha256:', '')
-
 	return digest[0:12]
 
 # Convert date/time string in ISO-6801 format to date(1)
@@ -135,7 +134,6 @@ tz = time.strftime('%Z')
 
 def parse_date(ts):
 	s = datetime.fromtimestamp(timegm(time.strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))).ctime()
-
 	return s[:-4] + tz + s[-5:]
 
 check_registry()
