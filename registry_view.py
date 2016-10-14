@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.2.3 by Ricardo Branco
+# v1.3 by Ricardo Branco
 #
 # MIT License
 
@@ -28,12 +28,21 @@ if sys.version_info[0] < 3:
 	import subprocess
 
 progname = os.path.basename(sys.argv[0])
-usage = "Usage: " + progname + " [-c CLIENT_CERT] [-k CLIENT_KEY] [-p CLIENT_KEY_PASS] REGISTRY[:PORT]"
+options = """
+Options:
+	-c, --cert CERT		Client certificate file name
+	-k, --key  KEY		Client private key file name
+	-p, --pass PASS		Pass phrase for the private key
+	-u, --user USER[:PASS]	Server user and password (for HTTP Basic authentication)
+"""
+usage = "Usage: " + progname + "[OPTIONS]... REGISTRY[:PORT]" + options
 
 c = pycurl.Curl()
 
+userpwd = ""
+
 try:
-	opts, args = getopt.getopt(sys.argv[1:], "hc:k:p:", ["help", "cert=", "key=", "pass="])
+	opts, args = getopt.getopt(sys.argv[1:], "hc:k:p:u:", ["help", "cert=", "key=", "pass=", "user="])
 except	getopt.GetoptError as err:
 	sys.exit(usage)
 for opt, arg in opts:
@@ -45,6 +54,10 @@ for opt, arg in opts:
 		if not arg:
 			arg = getpass("Client key password: ")
 		c.setopt(c.KEYPASSWD, arg)
+	elif opt in ("-u", "--user"):
+		userpwd = arg
+		if not ":" in userpwd:
+			userpwd += ":" + getpass("Password: ")
 	elif opt in ("-h", "--help"):
 		print(usage)
 		sys.exit(0)
@@ -62,24 +75,30 @@ if not re.match("https?://", registry):
 	else:
 		registry = "https://"+registry
 
-# Support HTTP Basic Authentication
-try:
-	f = open(os.path.expanduser("~/.docker/config.json"), "r")
-	hostname = re.sub("https?://", "", registry)
+# Get credentials from ~/.docker/config.json
+def get_creds():
 	try:
-		data = json.load(f)
-		auth = data['auths'][hostname]['auth']
-		if auth:
-			c.setopt(c.USERPWD, base64.b64decode(auth).decode('iso-8859-1'))
+		f = open(os.path.expanduser("~/.docker/config.json"), "r")
+		hostname = re.sub("https?://", "", registry)
+		try:
+			data = json.load(f)
+			auth = data['auths'][hostname]['auth']
+			if auth:
+				return base64.b64decode(auth).decode('iso-8859-1')
+		except:
+			pass
+		f.close()
 	except:
 		pass
-	f.close()
-except:
-	pass
+	return ""
 
 if os.environ.get('DEBUG') is not None:
 	c.setopt(c.VERBOSE, 1)
 c.setopt(c.SSL_VERIFYPEER, 0)
+if not userpwd:
+	userpwd = get_creds()
+if userpwd:
+	c.setopt(c.USERPWD, userpwd)
 
 def curl(url, headers=[]):
 	buffer = BytesIO()
@@ -95,7 +114,7 @@ def check_registry():
 	if curl("/v2/") != "{}":
 		http_code = c.getinfo(pycurl.HTTP_CODE)
 		if http_code == 401:
-			sys.exit("ERROR: HTTP/1.1 401 Unauthorized. Try docker-login(1) first")
+			sys.exit("ERROR: HTTP/1.1 401 Unauthorized. Try docker-login(1) first or specify the -u option")
 		elif http_code == 404:
 			sys.exit("ERROR: Invalid v2 Docker Registry: " + args[0])
 		else:
@@ -144,7 +163,7 @@ except:	# Unix only
 	columns = int(subprocess.check_output(['stty', 'size']).split()[1])
 cols = int(columns/3)
 
-print("%-*s\t%-12s\t%s\t\t%s" % (cols, "Image", "Id", "Created on", "Docker version"))
+print("%-*s\t%-12s\t%-30s\t\t%s" % (cols, "Image", "Id", "Created on", "Docker version"))
 
 for repo in get_repos():
 	for tag in get_tags(repo):
