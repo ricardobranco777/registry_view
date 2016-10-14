@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.2.1 by Ricardo Branco
+# v1.2.2 by Ricardo Branco
 #
 # MIT License
 
@@ -30,9 +30,7 @@ if sys.version_info[0] < 3:
 progname = os.path.basename(sys.argv[0])
 usage = "Usage: " + progname + " [-c CLIENT_CERT] [-k CLIENT_KEY] [-p CLIENT_KEY_PASS] REGISTRY[:PORT]"
 
-cert = ""
-key = ""
-key_pass = ""
+c = pycurl.Curl()
 
 try:
 	opts, args = getopt.getopt(sys.argv[1:], "hc:k:p:", ["help", "cert=", "key=", "pass="])
@@ -40,13 +38,13 @@ except	getopt.GetoptError as err:
 	sys.exit(usage)
 for opt, arg in opts:
 	if opt in ("-c", "--cert"):
-		cert = arg
+		c.setopt(c.SSLCERT, arg)
 	elif opt in ("-k", "--key"):
-		key = arg
+		c.setopt(c.SSLKEY, arg)
 	elif opt in ("-p", "--pass"):
-		key_pass = arg
-		if key_pass == "":
-			key_pass = getpass("Client key password: ")
+		if arg == "":
+			arg = getpass("Client key password: ")
+		c.setopt(c.KEYPASSWD, arg)
 	elif opt in ("-h", "--help"):
 		print(usage)
 		sys.exit(0)
@@ -65,7 +63,6 @@ if not re.match("https?://", registry):
 		registry = "https://"+registry
 
 # Support HTTP Basic Authentication
-userpwd = ""
 try:
 	f = open(os.path.expanduser("~/.docker/config.json"), "r")
 	hostname = re.sub("https?://", "", registry)
@@ -73,27 +70,15 @@ try:
 		data = json.load(f)
 		auth = data['auths'][hostname]['auth']
 		if auth != "":
-			userpwd = base64.b64decode(auth).decode('iso-8859-1')
+			c.setopt(c.USERPWD, base64.b64decode(auth).decode('iso-8859-1'))
 	except:
 		pass
 	f.close()
 except:
 	pass
 
-c = pycurl.Curl()
-
-debug = os.environ.get('DEBUG')
-if debug is not None:
+if os.environ.get('DEBUG') is not None:
 	c.setopt(c.VERBOSE, 1)
-
-if userpwd != "":
-	c.setopt(c.USERPWD, userpwd)
-if cert != "":
-	c.setopt(c.SSLCERT, cert)
-if key != "":
-	c.setopt(c.SSLKEY, key)
-if key_pass != "":
-	c.setopt(c.KEYPASSWD, key_pass)
 c.setopt(c.SSL_VERIFYPEER, 0)
 
 def curl(url, headers=[]):
@@ -159,7 +144,6 @@ try:	# Python 3
 	columns = os.get_terminal_size().columns
 except:	# Unix only
 	columns = int(subprocess.check_output(['stty', 'size']).split()[1])
-
 cols = int(columns/3)
 
 print("Image".ljust(cols)+'\t'+"Id".ljust(12)+'\t'+'Created on'.ljust(30)+"\t\tDocker version")
