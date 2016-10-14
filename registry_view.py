@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.2.2 by Ricardo Branco
+# v1.2.3 by Ricardo Branco
 #
 # MIT License
 
@@ -69,7 +69,7 @@ try:
 	try:
 		data = json.load(f)
 		auth = data['auths'][hostname]['auth']
-		if not auth:
+		if auth:
 			c.setopt(c.USERPWD, base64.b64decode(auth).decode('iso-8859-1'))
 	except:
 		pass
@@ -149,7 +149,7 @@ print("%-*s\t%-12s\t%s\t\t%s" % (cols, "Image", "Id", "Created on", "Docker vers
 for repo in get_repos():
 	for tag in get_tags(repo):
 		date, version = get_info(repo, tag)
-		if not date:
+		if date:
 			date = parse_date(date)
 		digest = "-"
 		if version and int(version.replace('.', '')) > 190:
