@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.2 by Ricardo Branco
+# v1.2.1 by Ricardo Branco
 #
 # MIT License
 
@@ -94,6 +94,7 @@ if key != "":
 	c.setopt(c.SSLKEY, key)
 if key_pass != "":
 	c.setopt(c.KEYPASSWD, key_pass)
+c.setopt(c.SSL_VERIFYPEER, 0)
 
 def curl(url, headers=[]):
 	buffer = BytesIO()
