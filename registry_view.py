@@ -1,18 +1,21 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.1 by Ricardo Branco
+# v1.1.1 by Ricardo Branco
 #
 # MIT License
 
 import base64, json, os, re, string, subprocess, sys
 
-import pycurl
-
 import time
 from calendar import timegm
 from datetime import datetime
+
+try:
+	import pycurl
+except:
+	sys.exit("ERROR: Please install PyCurl")
 
 try:
     from io import BytesIO
