@@ -42,7 +42,7 @@ for opt, arg in opts:
 	elif opt in ("-k", "--key"):
 		c.setopt(c.SSLKEY, arg)
 	elif opt in ("-p", "--pass"):
-		if arg == "":
+		if not arg:
 			arg = getpass("Client key password: ")
 		c.setopt(c.KEYPASSWD, arg)
 	elif opt in ("-h", "--help"):
@@ -69,7 +69,7 @@ try:
 	try:
 		data = json.load(f)
 		auth = data['auths'][hostname]['auth']
-		if auth != "":
+		if not auth:
 			c.setopt(c.USERPWD, base64.b64decode(auth).decode('iso-8859-1'))
 	except:
 		pass
@@ -149,7 +149,7 @@ print("Image".ljust(cols)+'\t'+"Id".ljust(12)+'\t'+'Created on'.ljust(30)+"\t\tD
 for repo in get_repos():
 	for tag in get_tags(repo):
 		date, version = get_info(repo, tag)
-		if date != "":
+		if not date:
 			date = parse_date(date)
 		digest = "-"
 		if version and int(version.replace('.', '')) > 190:
