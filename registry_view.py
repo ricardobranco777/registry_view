@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.3 by Ricardo Branco
+# v1.3.1 by Ricardo Branco
 #
 # MIT License
 
@@ -85,9 +85,8 @@ def get_creds():
 			auth = data['auths'][hostname]['auth']
 			if auth:
 				return base64.b64decode(auth).decode('iso-8859-1')
-		except:
-			pass
-		f.close()
+		finally:
+			f.close()
 	except:
 		pass
 	return ""
