@@ -144,7 +144,7 @@ except:	# Unix only
 	columns = int(subprocess.check_output(['stty', 'size']).split()[1])
 cols = int(columns/3)
 
-print("Image".ljust(cols)+'\t'+"Id".ljust(12)+'\t'+'Created on'.ljust(30)+"\t\tDocker version")
+print("%-*s\t%-12s\t%s\t\t%s" % (cols, "Image", "Id", "Created on", "Docker version"))
 
 for repo in get_repos():
 	for tag in get_tags(repo):
@@ -155,7 +155,7 @@ for repo in get_repos():
 		if version and int(version.replace('.', '')) > 190:
 			digest = get_id(repo, tag)
 		image = repo + ":" + tag
-		print(image.ljust(cols) + '\t' + digest.ljust(12) + '\t' + date + "\t\t" + version)
+		print("%-*s\t%-12s\t%s\t\t%s" % (cols, image, digest, date, version))
 
 c.close()
 
