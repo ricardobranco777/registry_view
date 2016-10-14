@@ -112,7 +112,7 @@ def get_tags(repo):
 		data = json.loads(info)
 		return data['tags']
 	else:
-		return []
+		return ()
 
 def get_info(repo, tag):
 	data = json.loads(curl("/v2/"+repo+"/manifests/"+tag, ["Accept: application/vnd.docker.distribution.manifest.v1+json"]))
@@ -120,7 +120,7 @@ def get_info(repo, tag):
 		data = json.loads(data['history'][0]['v1Compatibility'])
 		return [data['created'], data['docker_version']]
 	except:
-		return ['', '']
+		return '', ''
 
 # Returns truncated image ID (as done by docker-images command)
 def get_id(repo, tag):
