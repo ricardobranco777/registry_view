@@ -2,11 +2,11 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.1.1 by Ricardo Branco
+# v1.1.2 by Ricardo Branco
 #
 # MIT License
 
-import base64, json, os, re, string, subprocess, sys
+import base64, json, os, re, string, sys
 
 import time
 from calendar import timegm
@@ -21,6 +21,9 @@ try:
     from io import BytesIO
 except ImportError:
     from StringIO import StringIO as BytesIO
+
+if sys.version_info[0] < 3:
+	import subprocess
 
 progname = os.path.basename(sys.argv[0])
 usage = "Usage: " + progname + " REGISTRY[:PORT]"
@@ -122,8 +125,11 @@ def parse_date(ts):
 
 check_registry()
 
-# XXX: Unix only
-columns = int(subprocess.check_output(['stty', 'size']).split()[1])
+try:	# Python 3
+	columns = os.get_terminal_size().columns
+except:	# Unix only
+	columns = int(subprocess.check_output(['stty', 'size']).split()[1])
+
 cols = int(columns/3)
 
 print("Image".ljust(cols)+'\t'+"Id".ljust(12)+'\t'+'Created on'.ljust(30)+"\t\tDocker version")
