@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.3.2 by Ricardo Branco
+# v1.3.3 by Ricardo Branco
 #
 # MIT License
 
@@ -70,10 +70,10 @@ registry = args[0].rstrip("/")
 
 # Add scheme, if absent
 if not re.match("https?://", registry):
-	if registry[-5:] == ":5000":
-		registry = "http://"+registry
-	else:
+	if cert or key or registry[-5:] != ":5000":
 		registry = "https://"+registry
+	else
+		registry = "http://"+registry
 
 # Get credentials from ~/.docker/config.json
 def get_creds():
