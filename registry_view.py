@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.3.1 by Ricardo Branco
+# v1.3.2 by Ricardo Branco
 #
 # MIT License
 
@@ -104,7 +104,11 @@ def curl(url, headers=[]):
 	c.setopt(c.URL, registry + url)
 	c.setopt(c.WRITEDATA, buffer)
 	c.setopt(c.HTTPHEADER, headers)
-	c.perform()
+	try:
+		c.perform()
+	except	pycurl.error, err:
+		print(c.errstr())
+		sys.exit(err[0])
 	body = buffer.getvalue()
 	buffer.close()
 	return body.decode('iso-8859-1')
