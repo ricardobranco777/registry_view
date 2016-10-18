@@ -72,7 +72,7 @@ registry = args[0].rstrip("/")
 if not re.match("https?://", registry):
 	if cert or key or registry[-5:] != ":5000":
 		registry = "https://"+registry
-	else
+	else:
 		registry = "http://"+registry
 
 # Get credentials from ~/.docker/config.json
