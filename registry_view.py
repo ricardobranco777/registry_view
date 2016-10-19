@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.3.4 by Ricardo Branco
+# v1.4 by Ricardo Branco
 #
 # MIT License
 
@@ -106,7 +106,7 @@ def curl(url, headers=[]):
 	c.setopt(c.HTTPHEADER, headers)
 	try:
 		c.perform()
-	except	pycurl.error, err:
+	except	pycurl.error as err:
 		print(c.errstr())
 		sys.exit(err[0])
 	body = buffer.getvalue()
@@ -125,6 +125,7 @@ def check_registry():
 
 def get_repos():
 	data = json.loads(curl("/v2/_catalog"))
+	data['repositories'].sort()
 	return data['repositories']
 
 def get_tags(repo):
@@ -132,6 +133,7 @@ def get_tags(repo):
 
 	if info[0:10] != '{"errors":':
 		data = json.loads(info)
+		data['tags'].sort()
 		return data['tags']
 	else:
 		return ()
