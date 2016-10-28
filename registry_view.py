@@ -2,11 +2,11 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.5 by Ricardo Branco
+# v1.5.1 by Ricardo Branco
 #
 # MIT License
 
-import base64, getopt, json, os, re, string, sys
+import argparse, base64, json, os, re, string, sys
 
 import time
 from calendar import timegm
@@ -28,45 +28,33 @@ if sys.version_info[0] < 3:
 	import subprocess
 
 progname = os.path.basename(sys.argv[0])
-options = """
+usage = progname + """ [OPTIONS]... REGISTRY[:PORT]
 Options:
 	-c, --cert CERT		Client certificate file name
 	-k, --key  KEY		Client private key file name
 	-p, --pass PASS		Pass phrase for the private key
 	-u, --user USER[:PASS]	Server user and password (for HTTP Basic authentication)
+        -v, --verbose		Be verbose. May be specified multiple times
 """
-usage = "Usage: " + progname + "[OPTIONS]... REGISTRY[:PORT]" + options
 
-c = pycurl.Curl()
+parser = argparse.ArgumentParser(usage=usage, add_help=False)
+parser.add_argument('-c', '--cert')
+parser.add_argument('-k', '--key')
+parser.add_argument('-p', '--pass')
+parser.add_argument('-u', '--user')
+parser.add_argument('-h', '--help', action='store_true')
+parser.add_argument('-v', '--verbose', action='count')
+parser.add_argument('registry', nargs='?')
+args = parser.parse_args()
 
-userpwd = ""
+if args.help or not args.registry:
+	print("usage: "+usage)
+	sys.exit(not args.help)
 
-try:
-	opts, args = getopt.getopt(sys.argv[1:], "hc:k:p:u:", ["help", "cert=", "key=", "pass=", "user="])
-except	getopt.GetoptError as err:
-	sys.exit(usage)
-for opt, arg in opts:
-	if opt in ("-c", "--cert"):
-		c.setopt(c.SSLCERT, arg)
-	elif opt in ("-k", "--key"):
-		c.setopt(c.SSLKEY, arg)
-	elif opt in ("-p", "--pass"):
-		if not arg:
-			arg = getpass("Client key password: ")
-		c.setopt(c.KEYPASSWD, arg)
-	elif opt in ("-u", "--user"):
-		userpwd = arg
-		if not ":" in userpwd:
-			userpwd += ":" + getpass("Password: ")
-	elif opt in ("-h", "--help"):
-		print(usage)
-		sys.exit(0)
-
-if len(args) < 1:
-	sys.exit(usage)
+registry = args.registry
 
 # Strip any trailing slashes
-registry = args[0].rstrip("/")
+registry = args.registry.rstrip("/")
 
 # Add scheme, if absent
 if not re.match("https?://", registry):
@@ -90,13 +78,24 @@ def get_creds():
 		pass
 	return ""
 
-if os.environ.get('DEBUG') is not None:
-	c.setopt(c.VERBOSE, 1)
+c = pycurl.Curl()
+
+if args.cert:
+	c.setopt(c.SSLCERT, args.cert)
+if args.key:
+	c.setopt(c.SSLKEY, args.key)
+if getattr(args, 'pass'):
+	c.setopt(c.KEYPASSWD, getattr(args, 'pass'))
+if args.user:
+	if not ':' in args.user:
+		args.user += ":" + getpass("Password: ")
+else:
+	args.user = get_creds()
+if args.user:
+	c.setopt(c.USERPWD, args.user)
+if args.verbose:
+	c.setopt(c.VERBOSE, args.verbose)
 c.setopt(c.SSL_VERIFYPEER, 0)
-if not userpwd:
-	userpwd = get_creds()
-if userpwd:
-	c.setopt(c.USERPWD, userpwd)
 
 def curl(url, headers=[]):
 	buffer = BytesIO()
