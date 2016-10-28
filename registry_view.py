@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.3.1 by Ricardo Branco
+# v1.4.1 by Ricardo Branco
 #
 # MIT License
 
@@ -70,10 +70,10 @@ registry = args[0].rstrip("/")
 
 # Add scheme, if absent
 if not re.match("https?://", registry):
-	if registry[-5:] == ":5000":
-		registry = "http://"+registry
-	else:
+	if registry[-5:] != ":5000":
 		registry = "https://"+registry
+	else:
+		registry = "http://"+registry
 
 # Get credentials from ~/.docker/config.json
 def get_creds():
@@ -81,8 +81,7 @@ def get_creds():
 		f = open(os.path.expanduser("~/.docker/config.json"), "r")
 		hostname = re.sub("https?://", "", registry)
 		try:
-			data = json.load(f)
-			auth = data['auths'][hostname]['auth']
+			auth = json.load(f)['auths'][hostname]['auth']
 			if auth:
 				return base64.b64decode(auth).decode('iso-8859-1')
 		finally:
@@ -104,7 +103,11 @@ def curl(url, headers=[]):
 	c.setopt(c.URL, registry + url)
 	c.setopt(c.WRITEDATA, buffer)
 	c.setopt(c.HTTPHEADER, headers)
-	c.perform()
+	try:
+		c.perform()
+	except	pycurl.error as err:
+		print(c.errstr())
+		sys.exit(err[0])
 	body = buffer.getvalue()
 	buffer.close()
 	return body.decode('iso-8859-1')
@@ -121,16 +124,16 @@ def check_registry():
 
 def get_repos():
 	data = json.loads(curl("/v2/_catalog"))
+	data['repositories'].sort()
 	return data['repositories']
 
 def get_tags(repo):
 	info = curl("/v2/"+repo+"/tags/list")
-
-	if info[0:10] != '{"errors":':
-		data = json.loads(info)
-		return data['tags']
-	else:
+	if info[0:10] == '{"errors":':
 		return ()
+	data = json.loads(info)
+	data['tags'].sort()
+	return data['tags']
 
 def get_info(repo, tag):
 	data = json.loads(curl("/v2/"+repo+"/manifests/"+tag, ["Accept: application/vnd.docker.distribution.manifest.v1+json"]))
@@ -143,8 +146,7 @@ def get_info(repo, tag):
 # Returns truncated image ID (as done by docker-images command)
 def get_id(repo, tag):
 	data = json.loads(curl("/v2/"+repo+"/manifests/"+tag, ["Accept: application/vnd.docker.distribution.manifest.v2+json"]))
-	digest = data['config']['digest'].replace('sha256:', '')
-	return digest[0:12]
+	return data['config']['digest'].replace('sha256:', '')
 
 # Convert date/time string in ISO-6801 format to date(1)
 
@@ -171,9 +173,8 @@ for repo in get_repos():
 			date = parse_date(date)
 		digest = "-"
 		if version and int(version.replace('.', '')) > 190:
-			digest = get_id(repo, tag)
-		image = repo + ":" + tag
-		print("%-*s\t%-12s\t%s\t\t%s" % (cols, image, digest, date, version))
+			digest = get_id(repo, tag)[0:12]
+		print("%-*s\t%-12s\t%s\t\t%s" % (cols, repo+":"+tag, digest, date, version))
 
 c.close()
 
