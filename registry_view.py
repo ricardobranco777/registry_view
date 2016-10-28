@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.4.1 by Ricardo Branco
+# v1.5 by Ricardo Branco
 #
 # MIT License
 
@@ -129,11 +129,11 @@ def get_repos():
 
 def get_tags(repo):
 	info = curl("/v2/"+repo+"/tags/list")
-	if info[0:10] == '{"errors":':
-		return ()
 	data = json.loads(info)
+	if info[0:10] == '{"errors":':
+		return '', data['errors'][0]['message']
 	data['tags'].sort()
-	return data['tags']
+	return data['tags'], ''
 
 def get_info(repo, tag):
 	data = json.loads(curl("/v2/"+repo+"/manifests/"+tag, ["Accept: application/vnd.docker.distribution.manifest.v1+json"]))
@@ -167,7 +167,11 @@ cols = int(columns/3)
 print("%-*s\t%-12s\t%-30s\t\t%s" % (cols, "Image", "Id", "Created on", "Docker version"))
 
 for repo in get_repos():
-	for tag in get_tags(repo):
+	tags, error = get_tags(repo)
+	if error:
+		print("%-*s\t%-12s\terror: %s" % (cols, repo, "-", error))
+		continue
+	for tag in tags:
 		date, version = get_info(repo, tag)
 		if date:
 			date = parse_date(date)
