@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.5.1 by Ricardo Branco
+# v1.5.2 by Ricardo Branco
 #
 # MIT License
 
@@ -80,21 +80,16 @@ def get_creds():
 
 c = pycurl.Curl()
 
-if args.cert:
-	c.setopt(c.SSLCERT, args.cert)
-if args.key:
-	c.setopt(c.SSLKEY, args.key)
-if getattr(args, 'pass'):
-	c.setopt(c.KEYPASSWD, getattr(args, 'pass'))
-if args.user:
-	if not ':' in args.user:
-		args.user += ":" + getpass("Password: ")
+args = vars(args)
+if args['user']:
+	if not ':' in args['user']:
+		args['user'] += ":" + getpass("Password: ")
 else:
-	args.user = get_creds()
-if args.user:
-	c.setopt(c.USERPWD, args.user)
-if args.verbose:
-	c.setopt(c.VERBOSE, args.verbose)
+	args['user'] = get_creds()
+for opt, curlopt in (('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('pass', pycurl.KEYPASSWD),
+			 ('user', pycurl.USERPWD), ('verbose', pycurl.VERBOSE)):
+	if args[opt]:
+		c.setopt(curlopt, args[opt])
 c.setopt(c.SSL_VERIFYPEER, 0)
 
 def curl(url, headers=[]):
@@ -117,7 +112,7 @@ def check_registry():
 		if http_code == 401:
 			sys.exit("ERROR: HTTP/1.1 401 Unauthorized. Try docker-login(1) first or specify the -u option")
 		elif http_code == 404:
-			sys.exit("ERROR: Invalid v2 Docker Registry: " + args[0])
+			sys.exit("ERROR: Invalid v2 Docker Registry: " + args['registry'])
 		else:
 			sys.exit("ERROR: HTTP " + str(http_code))
 
@@ -176,8 +171,8 @@ for repo in get_repos():
 			date = parse_date(date)
 		digest = "-"
 		if version and int(version.replace('.', '')) > 190:
-			digest = get_id(repo, tag)[0:12]
-		print("%-*s\t%-12s\t%s\t\t%s" % (cols, repo+":"+tag, digest, date, version))
+			digest = get_id(repo, tag)
+		print("%-*s\t%-12s\t%s\t\t%s" % (cols, repo+":"+tag, digest[0:12], date, version))
 
 c.close()
 
