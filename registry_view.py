@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.6.3 by Ricardo Branco
+# v1.6.4 by Ricardo Branco
 #
 # MIT License
 
@@ -70,7 +70,8 @@ class Curl:
 			self.c.perform()
 		except	pycurl.error as err:
 			print(self.c.errstr())
-			sys.exit(err[0])
+			err = err.args[0]
+			sys.exit(err)
 		body = buf.getvalue()
 		buf.close()
 		return body.decode('iso-8859-1')
