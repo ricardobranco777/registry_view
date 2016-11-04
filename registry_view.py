@@ -2,9 +2,11 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.6.5 by Ricardo Branco
+# v1.6.6 by Ricardo Branco
 #
 # MIT License
+
+from __future__ import print_function
 
 import argparse, base64, json, os, re, string, sys
 
@@ -14,8 +16,11 @@ from datetime import datetime
 
 from getpass import getpass
 
-try:	import pycurl
-except: sys.exit("ERROR: Please install PyCurl")
+try:
+	import pycurl
+except:
+	print('ERROR: Please install PyCurl', file=sys.stderr)
+	sys.exit(1)
 
 try:
 	from io import BytesIO
@@ -76,9 +81,8 @@ class Curl:
 		try:
 			self.c.perform()
 		except	pycurl.error as err:
-			print(self.c.errstr())
-			err = err.args[0]
-			sys.exit(err)
+			print(self.c.errstr(), file=sys.stderr)
+			sys.exit(err.args[0])
 		body = buf.getvalue()
 		buf.close()
 		return body.decode('iso-8859-1')
@@ -108,13 +112,15 @@ class DockerRegistryV2:
 		return self.__c.get(self.__registry + "/v2/" + url, headers, save_headers)
 
 	def __check_registry(self):
-		if self.__get("", save_headers=True) != "{}":
-			http_code = self.__c.get_http_code()
-			if http_code == 404:
-				sys.exit("ERROR: Invalid v2 Docker Registry: " + self.__registry)
-			else:
-				error = self.__c.get_headers().get('HTTP_STATUS')
-				sys.exit("ERROR: " + error)
+		if self.__get("", save_headers=True) == "{}":
+			return
+		http_code = self.__c.get_http_code()
+		if http_code == 404:
+			error = 'Invalid v2 Docker Registry: ' + self.__registry
+		else:
+			error = self.__c.get_headers().get('HTTP_STATUS')
+		print('ERROR: ' + error, file=sys.stderr)
+		sys.exit(1)
 
 	def __get_creds(self):
 		try:
@@ -177,9 +183,11 @@ Options:
 	parser.add_argument('registry', nargs='?')
 	args = parser.parse_args()
 
-	if args.help or not args.registry:
-		print("usage: "+usage)
-		sys.exit(not args.help)
+	if args.help:
+		sys.exit('usage: ' + usage)
+	elif not args.registry:
+		print('usage: ' + usage, file=sys.stderr)
+		sys.exit(1)
 
 	# Convert date/time string in ISO-6801 format to date(1)
 	tz = time.strftime('%Z')
