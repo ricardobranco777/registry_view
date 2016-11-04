@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.6.4 by Ricardo Branco
+# v1.6.5 by Ricardo Branco
 #
 # MIT License
 
@@ -28,15 +28,22 @@ if sys.version_info[0] < 3:
 class Curl:
 	__headers = {}
 	__save_headers = False
+	__debug_str = { pycurl.INFOTYPE_TEXT: 'I:', pycurl.INFOTYPE_HEADER_IN: 'H<: ', pycurl.INFOTYPE_HEADER_OUT: 'H>: ',
+			pycurl.INFOTYPE_DATA_IN: 'D<:\n', pycurl.INFOTYPE_DATA_OUT: 'D>:\n' }
 
 	def __init__(self, **args):
 		self.c = pycurl.Curl()
 		for opt, curlopt in (('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('pass', pycurl.KEYPASSWD), ('verbose', pycurl.VERBOSE)):
 			if args[opt]: self.c.setopt(curlopt, args[opt])
 		self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
+		if args['verbose'] and args['verbose'] > 1:
+			self.c.setopt(pycurl.DEBUGFUNCTION, self.__debug_function)
 
 	def __del__(self):
 		if self.c: self.c.close()
+
+	def __debug_function(self, t, message):
+		sys.stdout.write(self.__debug_str.get(t) + message.decode('iso-8859-1'))
 
 	# Adapted from https://github.com/pycurl/pycurl/blob/master/examples/quickstart/response_headers.py
 	def __header_function(self, header_line):
@@ -106,7 +113,8 @@ class DockerRegistryV2:
 			if http_code == 404:
 				sys.exit("ERROR: Invalid v2 Docker Registry: " + self.__registry)
 			else:
-				sys.exit("ERROR: " + self.__c.get_headers()['HTTP_STATUS'])
+				error = self.__c.get_headers().get('HTTP_STATUS')
+				sys.exit("ERROR: " + error)
 
 	def __get_creds(self):
 		try:
