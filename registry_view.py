@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.6.1 by Ricardo Branco
+# v1.6.3 by Ricardo Branco
 #
 # MIT License
 
@@ -26,6 +26,9 @@ if sys.version_info[0] < 3:
 	import subprocess
 
 class Curl:
+	__headers = {}
+	__save_headers = False
+
 	def __init__(self, **args):
 		self.c = pycurl.Curl()
 		for opt, curlopt in (('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('pass', pycurl.KEYPASSWD), ('verbose', pycurl.VERBOSE)):
@@ -35,11 +38,34 @@ class Curl:
 	def __del__(self):
 		if self.c: self.c.close()
 
-	def get(self, url, headers=[]):
+	# Adapted from https://github.com/pycurl/pycurl/blob/master/examples/quickstart/response_headers.py
+	def __header_function(self, header_line):
+		if not self.__save_headers:
+			return
+		# HTTP standard specifies that headers are encoded in iso-8859-1
+		header_line = header_line.decode('iso-8859-1')
+		# Header lines include the first status line (HTTP/1.x ...)
+		if ':' not in header_line:
+			if not self.__headers.get('HTTP_STATUS'):
+				self.__headers['HTTP_STATUS'] = header_line.strip()
+			return
+		# Break the header line into header name and value.
+		name, value = header_line.split(':', 1)
+		# Remove whitespace that may be present.
+		name = name.strip()
+		value = value.strip()
+		# Header names are case insensitive.
+		name = name.lower()
+		self.__headers[name] = value
+
+	def get(self, url, headers=[], save_headers=False):
 		buf = BytesIO()
+		__headers = {}
 		self.c.setopt(pycurl.URL, url)
 		self.c.setopt(pycurl.WRITEDATA, buf)
 		self.c.setopt(pycurl.HTTPHEADER, headers)
+		self.c.setopt(pycurl.HEADERFUNCTION, self.__header_function)
+		self.__save_headers = save_headers
 		try:
 			self.c.perform()
 		except	pycurl.error as err:
@@ -49,6 +75,9 @@ class Curl:
 		buf.close()
 		return body.decode('iso-8859-1')
 
+	def get_headers(self):
+		return self.__headers
+
 	def get_http_code(self):
 		return self.c.getinfo(pycurl.HTTP_CODE)
 
@@ -56,6 +85,9 @@ class DockerRegistryV2:
 	def __init__(self, **args):
 		self.__c = Curl(**args)
 		self.__registry = args['registry'].rstrip("/")
+		# Assume HTTPS by default
+		if not re.match("https?://", self.__registry):
+			self.__registry = "https://"+self.__registry
 		if args['user']:
 			if not ':' in args['user']:
 				args['user'] += ":" + getpass("Password: ")
@@ -64,29 +96,21 @@ class DockerRegistryV2:
 		self.__c.c.setopt(pycurl.USERPWD, args['user'])
 		self.__check_registry()
 
-	def __get(self, url, headers=[]):
-		return self.__c.get(self.__registry + "/v2/" + url, headers)
+	def __get(self, url, headers=[], save_headers=False):
+		return self.__c.get(self.__registry + "/v2/" + url, headers, save_headers)
 
 	def __check_registry(self):
-		# XXX: Add scheme, if absent
-		if not re.match("https?://", self.__registry):
-			if self.__registry.endswith(":5000"):
-				self.__registry = "http://"+self.__registry
-			else:
-				self.__registry = "https://"+self.__registry
-		if self.__get("") != "{}":
+		if self.__get("", save_headers=True) != "{}":
 			http_code = self.__c.get_http_code()
-			if http_code == 401:
-				sys.exit("ERROR: HTTP/1.1 401 Unauthorized.")
-			elif http_code == 404:
+			if http_code == 404:
 				sys.exit("ERROR: Invalid v2 Docker Registry: " + self.__registry)
 			else:
-				sys.exit("ERROR: HTTP " + str(http_code))
+				sys.exit("ERROR: " + self.__c.get_headers()['HTTP_STATUS'])
 
 	def __get_creds(self):
 		try:
 			f = open(os.path.expanduser("~/.docker/config.json"), "r")
-			hostname = re.sub("https?://", "", self.__registry)
+			hostname = re.sub("^https?://", "", self.__registry)
 			try:
 				auth = json.load(f)['auths'][hostname]['auth']
 				if auth:
