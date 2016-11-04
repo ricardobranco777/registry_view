@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.6.2 by Ricardo Branco
+# v1.6.1 by Ricardo Branco
 #
 # MIT License
 
@@ -118,7 +118,10 @@ class DockerRegistryV2:
 
 	def get_history_items(self, manifest, layer, *items):
 		data = json.loads(manifest['history'][layer]['v1Compatibility'])
-		return { key: data[key] for key in items }
+		if len(items):
+			return { key: data[key] for key in items }
+		else:
+			return dict(data)
 
 if __name__ == "__main__":
 	progname = os.path.basename(sys.argv[0])
