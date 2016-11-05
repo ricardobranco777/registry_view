@@ -36,12 +36,13 @@ class Curl:
 	__debug_str = { pycurl.INFOTYPE_TEXT: 'I:', pycurl.INFOTYPE_HEADER_IN: 'H<: ', pycurl.INFOTYPE_HEADER_OUT: 'H>: ',
 			pycurl.INFOTYPE_DATA_IN: 'D<:\n', pycurl.INFOTYPE_DATA_OUT: 'D>:\n' }
 
-	def __init__(self, **args):
+	def __init__(self, **opts):
 		self.c = pycurl.Curl()
-		for opt, curlopt in (('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('pass', pycurl.KEYPASSWD), ('verbose', pycurl.VERBOSE)):
-			if args[opt]: self.c.setopt(curlopt, args[opt])
+		for opt, curlopt in (('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('pass', pycurl.KEYPASSWD),
+				('verbose', pycurl.VERBOSE)):
+			if opts[opt]: self.c.setopt(curlopt, opts[opt])
 		self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
-		if args['verbose'] and args['verbose'] > 1:
+		if opts['verbose'] and opts['verbose'] > 1:
 			self.c.setopt(pycurl.DEBUGFUNCTION, self.__debug_function)
 
 	def __del__(self):
@@ -99,7 +100,7 @@ class DockerRegistryV2:
 		self.__registry = args['registry'].rstrip("/")
 		# Assume HTTPS by default
 		if not re.match("https?://", self.__registry):
-			self.__registry = "https://"+self.__registry
+			self.__registry = "https://" + self.__registry
 		if args['user']:
 			if not ':' in args['user']:
 				args['user'] += ":" + getpass("Password: ")
@@ -140,7 +141,7 @@ class DockerRegistryV2:
 		return data['repositories']
 
 	def get_tags(self, repo):
-		info = self.__get(repo+"/tags/list")
+		info = self.__get(repo + "/tags/list")
 		data = json.loads(info)
 		if info.startswith('{"errors":'):
 			return '', data['errors'][0]['message']
@@ -149,7 +150,8 @@ class DockerRegistryV2:
 
 	def get_manifest(self, repo, tag, version):
 		assert version in (1, 2)
-		info = self.__get(repo+"/manifests/"+tag, ["Accept: application/vnd.docker.distribution.manifest.v"+str(version)+"+json"])
+		info = self.__get(repo + "/manifests/" + tag,
+			["Accept: application/vnd.docker.distribution.manifest.v" + str(version) + "+json"])
 		data = json.loads(info)
 		if info.startswith('{"errors":'):
 			return '', data['errors'][0]['message']
@@ -221,5 +223,5 @@ Options:
 			if version and int(version.replace('.', '')) > 190:
 				manifest, _ = reg.get_manifest(repo, tag, 2)
 				digest = manifest['config']['digest'].replace('sha256:', '')
-			print("%-*s\t%-12s\t%s\t\t%s" % (cols, repo+":"+tag, digest[0:12], date, version))
+			print("%-*s\t%-12s\t%s\t\t%s" % (cols, repo + ":" + tag, digest[0:12], date, version))
 
