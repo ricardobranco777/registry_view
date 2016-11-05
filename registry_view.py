@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.6.6 by Ricardo Branco
+# v1.6.7 by Ricardo Branco
 #
 # MIT License
 
@@ -120,6 +120,8 @@ class DockerRegistryV2:
 			error = 'Invalid v2 Docker Registry: ' + self.__registry
 		else:
 			error = self.__c.get_headers().get('HTTP_STATUS')
+			if not error:
+				error = "Invalid HTTP server"
 		print('ERROR: ' + error, file=sys.stderr)
 		sys.exit(1)
 
