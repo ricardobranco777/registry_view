@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.6.9 by Ricardo Branco
+# v1.7 by Ricardo Branco
 #
 # MIT License
 
@@ -39,9 +39,9 @@ class Curl:
 	def __init__(self, **opts):
 		self.c = pycurl.Curl()
 		curlopts = [('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('verbose', pycurl.VERBOSE)]
-		try:
+		if hasattr(pycurl, 'KEYPASSWD'):
 			curlopts.append(['pass', pycurl.KEYPASSWD])	# Option added to PyCurl 7.21.5
-		except:
+		else:
 			curlopts.append(['pass', pycurl.SSLCERTPASSWD])
 		for opt, curlopt in curlopts:
 			if opts[opt]: self.c.setopt(curlopt, opts[opt])
@@ -101,6 +101,8 @@ class Curl:
 	def get_http_code(self):
 		return self.c.getinfo(pycurl.HTTP_CODE)
 
+class DockerRegistryError(Exception): pass
+
 class DockerRegistryV2:
 	def __init__(self, **args):
 		self.__c = Curl(**args)
@@ -153,9 +155,9 @@ class DockerRegistryV2:
 		info = self.__get(repo + "/tags/list")
 		data = json.loads(info)
 		if info.startswith('{"errors":'):
-			return '', data['errors'][0]['message']
+			raise DockerRegistryError(data['errors'][0]['message'])
 		data['tags'].sort()
-		return data['tags'], ''
+		return data['tags']
 
 	def get_manifest(self, repo, tag, version):
 		assert version in (1, 2)
@@ -163,8 +165,8 @@ class DockerRegistryV2:
 			["Accept: application/vnd.docker.distribution.manifest.v" + str(version) + "+json"])
 		data = json.loads(info)
 		if info.startswith('{"errors":'):
-			return '', data['errors'][0]['message']
-		return data, ''
+			raise DockerRegistryError(data['errors'][0]['message'])
+		return data
 
 	def get_history_items(self, manifest, layer, *items):
 		data = json.loads(manifest['history'][layer]['v1Compatibility'])
@@ -173,7 +175,7 @@ class DockerRegistryV2:
 		else:
 			return dict(data)
 
-if __name__ == "__main__":
+def main():
 	progname = os.path.basename(sys.argv[0])
 	usage = progname + """ [OPTIONS]... REGISTRY[:PORT]
 Options:
@@ -217,20 +219,30 @@ Options:
 	print("%-*s\t%-12s\t%-30s\t\t%s" % (cols, "Image", "Id", "Created on", "Docker version"))
 
 	for repo in reg.get_repositories():
-		tags, error = reg.get_tags(repo)
-		if error:
-			print("%-*s\t%-12s\terror: %s" % (cols, repo, "-", error))
+		try:
+			tags = reg.get_tags(repo)
+		except DockerRegistryError as error:
+			print("%-*s\tERROR: %s" % (cols, repo, error))
 			continue
 		for tag in tags:
 			try:
-				manifest, _ = reg.get_manifest(repo, tag, 1)
+				manifest = reg.get_manifest(repo, tag, 1)
+			except DockerRegistryError as error:
+				print("%-*s\tERROR: %s" % (cols, repo + ":" + tag, error))
+				continue
+			try:
 				items = reg.get_history_items(manifest, 0, 'created', 'docker_version')
 				date, version = [parse_date(items['created']), items['docker_version']]
 			except:
 				date, version = '', ''
 			digest = "-"
 			if version and int(version.replace('.', '')) > 190:
-				manifest, _ = reg.get_manifest(repo, tag, 2)
+				manifest = reg.get_manifest(repo, tag, 2)
 				digest = manifest['config']['digest'].replace('sha256:', '')
 			print("%-*s\t%-12s\t%s\t\t%s" % (cols, repo + ":" + tag, digest[0:12], date, version))
 
+if __name__ == "__main__":
+	try:
+		main()
+	except:
+		sys.exit(1)
