@@ -41,7 +41,8 @@ class Curl:
 		curlopts = [('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('verbose', pycurl.VERBOSE)]
 		try:
 			curlopts.append(['pass', pycurl.KEYPASSWD])	# Option added to PyCurl 7.21.5
-		except: pass
+		except:
+			curlopts.append(['pass', pycurl.SSLCERTPASSWD])
 		for opt, curlopt in curlopts:
 			if opts[opt]: self.c.setopt(curlopt, opts[opt])
 		self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
