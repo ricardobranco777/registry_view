@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.6.7 by Ricardo Branco
+# v1.6.8 by Ricardo Branco
 #
 # MIT License
 
@@ -33,8 +33,8 @@ if sys.version_info[0] < 3:
 class Curl:
 	__headers = {}
 	__save_headers = False
-	__debug_str = { pycurl.INFOTYPE_TEXT: 'I:', pycurl.INFOTYPE_HEADER_IN: 'H<: ', pycurl.INFOTYPE_HEADER_OUT: 'H>: ',
-			pycurl.INFOTYPE_DATA_IN: 'D<:\n', pycurl.INFOTYPE_DATA_OUT: 'D>:\n' }
+	__debug_str = { pycurl.INFOTYPE_TEXT: '* ', pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
+			pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: '' }
 
 	def __init__(self, **opts):
 		self.c = pycurl.Curl()
@@ -48,8 +48,11 @@ class Curl:
 	def __del__(self):
 		if self.c: self.c.close()
 
-	def __debug_function(self, t, message):
-		sys.stdout.write(self.__debug_str.get(t) + message.decode('iso-8859-1'))
+	def __debug_function(self, t, m):
+		m = m.decode('iso-8859-1').rstrip()
+		if t == pycurl.INFOTYPE_HEADER_OUT:
+			m = m.replace('\n', '\n' + self.__debug_str.get(t))
+		print(self.__debug_str.get(t) + m)
 
 	# Adapted from https://github.com/pycurl/pycurl/blob/master/examples/quickstart/response_headers.py
 	def __header_function(self, header_line):
