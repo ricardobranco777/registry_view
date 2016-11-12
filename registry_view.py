@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.6.8 by Ricardo Branco
+# v1.6.9 by Ricardo Branco
 #
 # MIT License
 
@@ -38,8 +38,11 @@ class Curl:
 
 	def __init__(self, **opts):
 		self.c = pycurl.Curl()
-		for opt, curlopt in (('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('pass', pycurl.KEYPASSWD),
-				('verbose', pycurl.VERBOSE)):
+		curlopts = [('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('verbose', pycurl.VERBOSE)]
+		try:
+			curlopts.append(['pass', pycurl.KEYPASSWD])	# Option added to PyCurl 7.21.5
+		except: pass
+		for opt, curlopt in curlopts:
 			if opts[opt]: self.c.setopt(curlopt, opts[opt])
 		self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
 		if opts['verbose'] and opts['verbose'] > 1:
