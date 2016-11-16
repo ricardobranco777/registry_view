@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.7 by Ricardo Branco
+# v1.7.1 by Ricardo Branco
 #
 # MIT License
 
@@ -32,7 +32,6 @@ if sys.version_info[0] < 3:
 
 class Curl:
 	__headers = {}
-	__save_headers = False
 	__debug_str = { pycurl.INFOTYPE_TEXT: '* ', pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
 			pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: '' }
 
@@ -60,8 +59,6 @@ class Curl:
 
 	# Adapted from https://github.com/pycurl/pycurl/blob/master/examples/quickstart/response_headers.py
 	def __header_function(self, header_line):
-		if not self.__save_headers:
-			return
 		# HTTP standard specifies that headers are encoded in iso-8859-1
 		header_line = header_line.decode('iso-8859-1')
 		# Header lines include the first status line (HTTP/1.x ...)
@@ -74,18 +71,15 @@ class Curl:
 		# Remove whitespace that may be present.
 		name = name.strip()
 		value = value.strip()
-		# Header names are case insensitive.
-		name = name.lower()
 		self.__headers[name] = value
 
-	def get(self, url, headers=[], save_headers=False):
+	def get(self, url, headers=[]):
 		buf = BytesIO()
 		__headers = {}
 		self.c.setopt(pycurl.URL, url)
 		self.c.setopt(pycurl.WRITEDATA, buf)
 		self.c.setopt(pycurl.HTTPHEADER, headers)
 		self.c.setopt(pycurl.HEADERFUNCTION, self.__header_function)
-		self.__save_headers = save_headers
 		try:
 			self.c.perform()
 		except	pycurl.error as err:
@@ -93,10 +87,18 @@ class Curl:
 			sys.exit(err.args[0])
 		body = buf.getvalue()
 		buf.close()
-		return body.decode('iso-8859-1')
+		return body.decode(self.get_charset())
 
 	def get_headers(self):
 		return self.__headers
+
+	def get_charset(self):
+		n = self.__headers['Content-Type'].find(' charset=')
+		if n == -1:
+			return 'iso-8859-1'
+		else:
+			n += len(' charset=')
+		return self.__headers['Content-Type'][n:].split(';')[0]
 
 	def get_http_code(self):
 		return self.c.getinfo(pycurl.HTTP_CODE)
@@ -118,11 +120,11 @@ class DockerRegistryV2:
 		self.__c.c.setopt(pycurl.USERPWD, args['user'])
 		self.__check_registry()
 
-	def __get(self, url, headers=[], save_headers=False):
-		return self.__c.get(self.__registry + "/v2/" + url, headers, save_headers)
+	def __get(self, url, headers=[]):
+		return self.__c.get(self.__registry + "/v2/" + url, headers)
 
 	def __check_registry(self):
-		if self.__get("", save_headers=True) == "{}":
+		if self.__get("") == "{}":
 			return
 		http_code = self.__c.get_http_code()
 		if http_code == 404:
