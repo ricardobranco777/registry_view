@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.7.2 by Ricardo Branco
+# v1.7.3 by Ricardo Branco
 #
 # MIT License
 
@@ -92,7 +92,10 @@ class Curl:
 		return self.__headers
 
 	def get_charset(self):
-		n = self.__headers['Content-Type'].find(' charset=')
+		try:
+			n = self.__headers['Content-Type'].find(' charset=')
+		except KeyError:
+			n = -1
 		if n == -1:
 			return 'iso-8859-1'
 		else:
