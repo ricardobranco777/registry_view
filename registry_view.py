@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.8.3 by Ricardo Branco
+# v1.8.4 by Ricardo Branco
 #
 # MIT License
 
@@ -18,13 +18,13 @@ from getpass import getpass
 
 try:
 	import pycurl
-except:
+except	ImportError:
 	print('ERROR: Please install PyCurl', file=sys.stderr)
 	sys.exit(1)
 
 try:
 	from io import BytesIO
-except ImportError:
+except	ImportError:
 	from StringIO import StringIO as BytesIO
 
 if sys.version_info[0] < 3:
@@ -254,6 +254,14 @@ Options:
 			print("ERROR: %s: %s" % ((args.image), error), file=sys.stderr)
 			sys.exit(1)
 
+		def pretty_size(size):
+			if size < 1024:
+				return str(size)
+			units = ('','K','M','G','T')
+			for n in (4,3,2,1):
+				if (size > 1024**n):
+					return "%.2f %cB" % ((float(size) / 1024**n), units[n])
+
 		if ':' in args.image:
 			repo, tag = args.image.rsplit(':', 1)
 		else:
@@ -284,7 +292,7 @@ Options:
 		# Print compressed image size
 		try:
 			size = reg.get_image_size(repo, tag)
-			print('%-15s\t%d' % ('CompressedSize', size))
+			print('%-15s\t%s' % ('CompressedSize', pretty_size(size)))
 		except  DockerRegistryError as error:
 			registry_error(error)
 
