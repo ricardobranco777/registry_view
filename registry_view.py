@@ -188,7 +188,7 @@ class DockerRegistryV2:
 			self.__info[key.title()] = data[key]
 		self.__info['Created'] = self.__parse_date(data['created'])
 		for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir'):
-			self.__info[key] = data['config'][key]
+			self.__info[key] = data['config'].get(key)
 		# Before Docker 1.9.0, ID's were not digests but random bytes
 		if self.__info['Docker_Version'] and int(self.__info['Docker_Version'].replace('.', '')) > 190:
 			manifest = self.get_manifest(repo, tag, 2)
