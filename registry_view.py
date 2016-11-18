@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.8.1 by Ricardo Branco
+# v1.8.2 by Ricardo Branco
 #
 # MIT License
 
@@ -48,13 +48,13 @@ class Curl:
 		if self.c: self.c.close()
 
 	def __debug_function(self, t, m):
-		debug_str = { pycurl.INFOTYPE_TEXT: '* ', pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
-			pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: '' }
+		curl_prefix = { pycurl.INFOTYPE_TEXT: '* ', pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
+				pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: '' }
 
 		m = m.decode('iso-8859-1').rstrip()
 		if t == pycurl.INFOTYPE_HEADER_OUT:
-			m = m.replace('\n', '\n' + debug_str.get(t))
-		print(debug_str.get(t) + m)
+			m = m.replace('\n', '\n' + curl_prefix[t])
+		print(curl_prefix[t] + m)
 
 	# Adapted from https://github.com/pycurl/pycurl/blob/master/examples/quickstart/response_headers.py
 	def __header_function(self, header_line):
@@ -62,19 +62,19 @@ class Curl:
 		header_line = header_line.decode('iso-8859-1')
 		# Header lines include the first status line (HTTP/1.x ...)
 		if ':' not in header_line:
-			if not self.__headers.get('HTTP_STATUS'):
-				self.__headers['HTTP_STATUS'] = header_line.strip()
+			if not self.headers.get('HTTP_STATUS'):
+				self.headers['HTTP_STATUS'] = header_line.strip()
 			return
 		# Break the header line into header name and value.
 		name, value = header_line.split(':', 1)
 		# Remove whitespace that may be present.
 		name = name.strip()
 		value = value.strip()
-		self.__headers[name] = value
+		self.headers[name] = value
 
 	def get(self, url, headers=[]):
 		buf = BytesIO()
-		self.__headers = {}
+		self.headers = {}
 		self.c.setopt(pycurl.URL, url)
 		self.c.setopt(pycurl.WRITEDATA, buf)
 		self.c.setopt(pycurl.HTTPHEADER, headers)
@@ -89,18 +89,15 @@ class Curl:
 		return body.decode(self.get_charset())
 
 	def get_headers(self):
-		return self.__headers
+		return self.headers
 
 	def get_charset(self):
 		try:
-			n = self.__headers['Content-Type'].find(' charset=')
-		except	KeyError:
-			n = -1
-		if n == -1:
-			return 'iso-8859-1'
-		else:
-			n += len(' charset=')
-		return self.__headers['Content-Type'][n:].split(';')[0]
+			match = re.search('charset=(\S+)', self.headers['Content-Type'])
+			if match:
+				return match.group(1)
+		except	KeyError: pass
+		return 'iso-8859-1'
 
 	def get_http_code(self):
 		return self.c.getinfo(pycurl.HTTP_CODE)
@@ -180,33 +177,34 @@ class DockerRegistryV2:
 		return data
 
 	def get_image_info(self, repo, tag):
-		self.__info = {}
+		info = {}
 		manifest = self.get_manifest(repo, tag, 1)
 		data = json.loads(manifest['history'][0]['v1Compatibility'])
 		for key in ('architecture', 'docker_version', 'os'):
-			self.__info[key.title()] = data[key]
-		self.__info['Created'] = self.__parse_date(data['created'])
+			info[key.title()] = data[key]
+		info['Created'] = self.__parse_date(data['created'])
 		for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir'):
-			self.__info[key] = data['config'].get(key)
+			info[key] = data['config'].get(key)
 		# Before Docker 1.9.0, ID's were not digests but random bytes
-		if self.__info['Docker_Version'] and int(self.__info['Docker_Version'].replace('.', '')) > 190:
+		if info['Docker_Version'] and int(info['Docker_Version'].replace('.', '')) > 190:
 			manifest = self.get_manifest(repo, tag, 2)
-			self.__info['Digest'] = manifest['config']['digest'].replace('sha256:', '')
+			info['Digest'] = manifest['config']['digest'].replace('sha256:', '')
 		else:
-			self.__info['Digest'] = "-"
-		return	self.__info
+			info['Digest'] = "-"
+		return	info
 
 	def get_image_history(self, repo, tag):
-		self.__history = []
+		history = []
 		manifest = self.get_manifest(repo, tag, 1)
+		prefix = '/bin/sh -c #(nop)'
+		n = len(prefix)
 		for i in range(len(manifest['history']) - 1, -1, -1):
 			data = json.loads(manifest['history'][i]['v1Compatibility'])
 			data = " ".join(data['container_config']['Cmd'])
-			prefix = '/bin/sh -c #(nop)'
 			if data.startswith(prefix):
-				data = data[len(prefix):].lstrip()
-			self.__history.append(data)
-		return self.__history
+				data = data[n:].lstrip()
+			history.append(data)
+		return	history
 
 def main():
 	usage = os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
@@ -235,7 +233,11 @@ Options:
 		sys.exit(1)
 
 	m = re.search('^((?:https?://)?[^:/]+(?::\d+)?)/*(.*)', args.image)
-	registry, args.image = m.group(1), m.group(2)
+	try:
+		registry, args.image = m.group(1), m.group(2)
+	except	AttributeError:
+		print('usage: ' + usage, file=sys.stderr)
+		sys.exit(1)
 
 	reg = DockerRegistryV2(registry, **vars(args))
 
