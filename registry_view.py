@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.8.4 by Ricardo Branco
+# v1.8.5 by Ricardo Branco
 #
 # MIT License
 
@@ -282,7 +282,9 @@ Options:
 			if type(value) is dict:
 				if key == "Labels":
 					#value = ' '.join('{}={}'.format(k, value[k]) for k in value)
-					value = ' '.join('%s=%s' % (k, value[k]) for k in value)
+					#value = ' '.join('%s=%s' % (k, value[k]) for k in value)
+					value = json.dumps(value)
+					value = str(value)
 				else:
 					value = list(value)
 			if type(value) is list:
