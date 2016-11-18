@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.8 by Ricardo Branco
+# v1.8.1 by Ricardo Branco
 #
 # MIT License
 
@@ -157,7 +157,6 @@ class DockerRegistryV2:
 		s = datetime.fromtimestamp(timegm(time.strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))).ctime()
 		return s[:-4] + self.__tz + s[-5:]
 
-
 	def get_repositories(self):
 		data = json.loads(self.__get("_catalog"))
 		data['repositories'].sort()
@@ -197,6 +196,17 @@ class DockerRegistryV2:
 			self.__info['Digest'] = "-"
 		return	self.__info
 
+	def get_image_history(self, repo, tag):
+		self.__history = []
+		manifest = self.get_manifest(repo, tag, 1)
+		for i in range(len(manifest['history']) - 1, -1, -1):
+			data = json.loads(manifest['history'][i]['v1Compatibility'])
+			data = " ".join(data['container_config']['Cmd'])
+			prefix = '/bin/sh -c #(nop)'
+			if data.startswith(prefix):
+				data = data[len(prefix):].lstrip()
+			self.__history.append(data)
+		return self.__history
 
 def main():
 	usage = os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
@@ -254,12 +264,21 @@ Options:
 			if type(value) is list:
 				value = " ".join(value)
 			print('%-15s\t%s' % (key.replace('_', ''), value.replace('\t', ' ')))
+		try:
+			history = reg.get_image_history(repo, tag)
+		except	DockerRegistryError as error:
+			print("ERROR: " + args.image + ": " + str(error), file=sys.stderr)
+			sys.exit(1)
+		i = 1
+		for layer in history:
+			print('%-15s\t%s' % ('History[' + str(i) + ']', layer.replace('\t', ' ')))
+			i += 1
 		sys.exit(0)
 
 	try:	# Python 3
 		columns = os.get_terminal_size().columns
 	except:	# Unix only
-		columns = int(subprocess.check_output(['stty', 'size']).split()[1])
+		columns = int(subprocess.check_output(['/bin/stty', 'size']).split()[1])
 	cols = int(columns/3)
 
 	print("%-*s\t%-12s\t%-30s\t\t%s" % (cols, "Image", "Id", "Created on", "Docker version"))
