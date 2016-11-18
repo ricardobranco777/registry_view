@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.8.2 by Ricardo Branco
+# v1.8.3 by Ricardo Branco
 #
 # MIT License
 
@@ -206,6 +206,13 @@ class DockerRegistryV2:
 			history.append(data)
 		return	history
 
+	def get_image_size(self, repo, tag):
+		size = 0
+		manifest = self.get_manifest(repo, tag, 2)
+		for i in range(0, len(manifest['layers'])):
+			size += manifest['layers'][i]['size']
+		return size
+
 def main():
 	usage = os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -241,16 +248,23 @@ Options:
 
 	reg = DockerRegistryV2(registry, **vars(args))
 
+	# Print information for a specific image
 	if args.image:
+		def registry_error(error):
+			print("ERROR: %s: %s" % ((args.image), error), file=sys.stderr)
+			sys.exit(1)
+
 		if ':' in args.image:
 			repo, tag = args.image.rsplit(':', 1)
 		else:
 			repo, tag = args.image, "latest"
+
 		try:
 			info = reg.get_image_info(repo, tag)
 		except	DockerRegistryError as error:
-			print("ERROR: " + args.image + ": " + str(error), file=sys.stderr)
-			sys.exit(1)
+			registry_error(error)
+
+		# Print image info
 		keys = list(info)
 		keys.sort()
 		for key in keys:
@@ -266,16 +280,26 @@ Options:
 			if type(value) is list:
 				value = " ".join(value)
 			print('%-15s\t%s' % (key.replace('_', ''), value.replace('\t', ' ')))
+
+		# Print compressed image size
+		try:
+			size = reg.get_image_size(repo, tag)
+			print('%-15s\t%d' % ('CompressedSize', size))
+		except  DockerRegistryError as error:
+			registry_error(error)
+
+		# Print image history
 		try:
 			history = reg.get_image_history(repo, tag)
 		except	DockerRegistryError as error:
-			print("ERROR: " + args.image + ": " + str(error), file=sys.stderr)
-			sys.exit(1)
+			registry_error(error)
 		i = 1
 		for layer in history:
 			print('%-15s\t%s' % ('History[' + str(i) + ']', layer.replace('\t', ' ')))
 			i += 1
 		sys.exit(0)
+
+	# Print information on all images
 
 	try:	# Python 3
 		columns = os.get_terminal_size().columns
