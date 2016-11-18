@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.8.5 by Ricardo Branco
+# v1.8.6 by Ricardo Branco
 #
 # MIT License
 
@@ -29,6 +29,19 @@ except	ImportError:
 
 if sys.version_info[0] < 3:
 	import subprocess
+
+version = "1.8.6"
+usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
+Options:
+	-c, --cert CERT		Client certificate file name
+	-k, --key  KEY		Client private key file name
+	-p, --pass PASS		Pass phrase for the private key
+	-u, --user USER[:PASS]	Server user and password (for HTTP Basic authentication)
+	-v, --verbose		Be verbose. May be specified multiple times
+	-V, --version		Show version string and quit
+
+Note: Default PORT is 443. You must prepend "http://" to REGISTRY if running on plain HTTP.
+"""
 
 class Curl:
 	def __init__(self, **opts):
@@ -214,15 +227,6 @@ class DockerRegistryV2:
 		return size
 
 def main():
-	usage = os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
-Options:
-	-c, --cert CERT		Client certificate file name
-	-k, --key  KEY		Client private key file name
-	-p, --pass PASS		Pass phrase for the private key
-	-u, --user USER[:PASS]	Server user and password (for HTTP Basic authentication)
-        -v, --verbose		Be verbose. May be specified multiple times
-"""
-
 	parser = argparse.ArgumentParser(usage=usage, add_help=False)
 	parser.add_argument('-c', '--cert')
 	parser.add_argument('-k', '--key')
@@ -230,11 +234,16 @@ Options:
 	parser.add_argument('-u', '--user')
 	parser.add_argument('-h', '--help', action='store_true')
 	parser.add_argument('-v', '--verbose', action='count')
+	parser.add_argument('-V', '--version', action='store_true')
 	parser.add_argument('image', nargs='?')
 	args = parser.parse_args()
 
 	if args.help:
-		sys.exit('usage: ' + usage)
+		print('usage: ' + usage)
+		sys.exit(0)
+	elif args.version:
+		print(sys.argv[0] + " " + version + " " + pycurl.version)
+		sys.exit(0)
 	elif not args.image:
 		print('usage: ' + usage, file=sys.stderr)
 		sys.exit(1)
