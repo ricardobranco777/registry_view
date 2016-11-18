@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.7.3 by Ricardo Branco
+# v1.8 by Ricardo Branco
 #
 # MIT License
 
@@ -94,7 +94,7 @@ class Curl:
 	def get_charset(self):
 		try:
 			n = self.__headers['Content-Type'].find(' charset=')
-		except KeyError:
+		except	KeyError:
 			n = -1
 		if n == -1:
 			return 'iso-8859-1'
@@ -108,9 +108,11 @@ class Curl:
 class DockerRegistryError(Exception): pass
 
 class DockerRegistryV2:
-	def __init__(self, **args):
+	__tz = time.strftime('%Z')
+
+	def __init__(self, registry, **args):
 		self.__c = Curl(**args)
-		self.__registry = args['registry'].rstrip("/")
+		self.__registry = registry
 		# Assume HTTPS by default
 		if not re.match("https?://", self.__registry):
 			self.__registry = "https://" + self.__registry
@@ -150,6 +152,12 @@ class DockerRegistryV2:
 				f.close()
 		except:	pass
 
+	# Convert date/time string in ISO-6801 format to date(1)
+	def __parse_date(self, ts):
+		s = datetime.fromtimestamp(timegm(time.strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))).ctime()
+		return s[:-4] + self.__tz + s[-5:]
+
+
 	def get_repositories(self):
 		data = json.loads(self.__get("_catalog"))
 		data['repositories'].sort()
@@ -172,16 +180,26 @@ class DockerRegistryV2:
 			raise DockerRegistryError(data['errors'][0]['message'])
 		return data
 
-	def get_history_items(self, manifest, layer, *items):
-		data = json.loads(manifest['history'][layer]['v1Compatibility'])
-		if len(items):
-			return { key: data[key] for key in items }
+	def get_image_info(self, repo, tag):
+		self.__info = {}
+		manifest = self.get_manifest(repo, tag, 1)
+		data = json.loads(manifest['history'][0]['v1Compatibility'])
+		for key in ('architecture', 'docker_version', 'os'):
+			self.__info[key.title()] = data[key]
+		self.__info['Created'] = self.__parse_date(data['created'])
+		for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir'):
+			self.__info[key] = data['config'][key]
+		# Before Docker 1.9.0, ID's were not digests but random bytes
+		if self.__info['Docker_Version'] and int(self.__info['Docker_Version'].replace('.', '')) > 190:
+			manifest = self.get_manifest(repo, tag, 2)
+			self.__info['Digest'] = manifest['config']['digest'].replace('sha256:', '')
 		else:
-			return dict(data)
+			self.__info['Digest'] = "-"
+		return	self.__info
+
 
 def main():
-	progname = os.path.basename(sys.argv[0])
-	usage = progname + """ [OPTIONS]... REGISTRY[:PORT]
+	usage = os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
 	-c, --cert CERT		Client certificate file name
 	-k, --key  KEY		Client private key file name
@@ -197,22 +215,46 @@ Options:
 	parser.add_argument('-u', '--user')
 	parser.add_argument('-h', '--help', action='store_true')
 	parser.add_argument('-v', '--verbose', action='count')
-	parser.add_argument('registry', nargs='?')
+	parser.add_argument('image', nargs='?')
 	args = parser.parse_args()
 
 	if args.help:
 		sys.exit('usage: ' + usage)
-	elif not args.registry:
+	elif not args.image:
 		print('usage: ' + usage, file=sys.stderr)
 		sys.exit(1)
 
-	# Convert date/time string in ISO-6801 format to date(1)
-	tz = time.strftime('%Z')
-	def parse_date(ts):
-		s = datetime.fromtimestamp(timegm(time.strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))).ctime()
-		return s[:-4] + tz + s[-5:]
+	m = re.search('^((?:https?://)?[^:/]+(?::\d+)?)/*(.*)', args.image)
+	registry, args.image = m.group(1), m.group(2)
 
-	reg = DockerRegistryV2(**vars(args))
+	reg = DockerRegistryV2(registry, **vars(args))
+
+	if args.image:
+		if ':' in args.image:
+			repo, tag = args.image.rsplit(':', 1)
+		else:
+			repo, tag = args.image, "latest"
+		try:
+			info = reg.get_image_info(repo, tag)
+		except	DockerRegistryError as error:
+			print("ERROR: " + args.image + ": " + str(error), file=sys.stderr)
+			sys.exit(1)
+		keys = list(info)
+		keys.sort()
+		for key in keys:
+			value = info.get(key)
+			if not value:
+				value = ""
+			if type(value) is dict:
+				if key == "Labels":
+					#value = ' '.join('{}={}'.format(k, value[k]) for k in value)
+					value = ' '.join('%s=%s' % (k, value[k]) for k in value)
+				else:
+					value = list(value)
+			if type(value) is list:
+				value = " ".join(value)
+			print('%-15s\t%s' % (key.replace('_', ''), value.replace('\t', ' ')))
+		sys.exit(0)
 
 	try:	# Python 3
 		columns = os.get_terminal_size().columns
@@ -225,28 +267,20 @@ Options:
 	for repo in reg.get_repositories():
 		try:
 			tags = reg.get_tags(repo)
-		except DockerRegistryError as error:
+		except	DockerRegistryError as error:
 			print("%-*s\tERROR: %s" % (cols, repo, error))
 			continue
 		for tag in tags:
 			try:
-				manifest = reg.get_manifest(repo, tag, 1)
-			except DockerRegistryError as error:
+				info = reg.get_image_info(repo, tag)
+			except	DockerRegistryError as error:
 				print("%-*s\tERROR: %s" % (cols, repo + ":" + tag, error))
-				continue
-			try:
-				items = reg.get_history_items(manifest, 0, 'created', 'docker_version')
-				date, version = [parse_date(items['created']), items['docker_version']]
-			except:
-				date, version = '', ''
-			digest = "-"
-			if version and int(version.replace('.', '')) > 190:
-				manifest = reg.get_manifest(repo, tag, 2)
-				digest = manifest['config']['digest'].replace('sha256:', '')
-			print("%-*s\t%-12s\t%s\t\t%s" % (cols, repo + ":" + tag, digest[0:12], date, version))
+			else:
+				print("%-*s\t%-12s\t%s\t\t%s" % (cols, repo + ":" + tag,
+					info['Digest'][0:12], info['Created'], info['Docker_Version']))
 
 if __name__ == "__main__":
 	try:
 		main()
-	except:
+	except	KeyboardInterrupt:
 		sys.exit(1)
