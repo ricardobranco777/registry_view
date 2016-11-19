@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.8.6 by Ricardo Branco
+# v1.8.7 by Ricardo Branco
 #
 # MIT License
 
@@ -30,7 +30,7 @@ except	ImportError:
 if sys.version_info[0] < 3:
 	import subprocess
 
-version = "1.8.6"
+version = "1.8.7"
 usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
 	-c, --cert CERT		Client certificate file name
@@ -56,6 +56,8 @@ class Curl:
 		self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
 		if opts['verbose'] and opts['verbose'] > 1:
 			self.c.setopt(pycurl.DEBUGFUNCTION, self.__debug_function)
+		self.c.setopt(pycurl.HEADERFUNCTION, self.__header_function)
+		self.c.setopt(pycurl.USERAGENT, sys.argv[0] + "/" + version + " " + pycurl.version)
 
 	def __del__(self):
 		if self.c: self.c.close()
@@ -91,7 +93,6 @@ class Curl:
 		self.c.setopt(pycurl.URL, url)
 		self.c.setopt(pycurl.WRITEDATA, buf)
 		self.c.setopt(pycurl.HTTPHEADER, headers)
-		self.c.setopt(pycurl.HEADERFUNCTION, self.__header_function)
 		try:
 			self.c.perform()
 		except	pycurl.error as err:
