@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.8.9 by Ricardo Branco
+# v1.8.10 by Ricardo Branco
 #
 # MIT License
 
@@ -30,7 +30,7 @@ except	ImportError:
 if sys.version_info[0] < 3:
 	import subprocess
 
-version = "1.8.9"
+version = "1.8.10"
 usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
 	-c, --cert CERT		Client certificate file name
@@ -212,7 +212,7 @@ class DockerRegistryV2:
 		for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir'):
 			info[key] = data['config'].get(key)
 		# Before Docker 1.9.0, ID's were not digests but random bytes
-		if info['Docker_Version'] and int(info['Docker_Version'].replace('.', '')) > 190:
+		if info['Docker_Version'] and int(info['Docker_Version'].replace('.', '')) >= 190:
 			manifest = self.get_manifest(repo, tag, 2)
 			info['Digest'] = manifest['config']['digest'].replace('sha256:', '')
 		else:
