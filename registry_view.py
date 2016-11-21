@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.8.8 by Ricardo Branco
+# v1.8.9 by Ricardo Branco
 #
 # MIT License
 
@@ -30,7 +30,7 @@ except	ImportError:
 if sys.version_info[0] < 3:
 	import subprocess
 
-version = "1.8.7"
+version = "1.8.9"
 usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
 	-c, --cert CERT		Client certificate file name
@@ -153,16 +153,20 @@ class DockerRegistryV2:
 		sys.exit(1)
 
 	def __get_creds(self):
+		auth = ""
 		try:
 			f = open(os.path.expanduser("~/.docker/config.json"), "r")
 			hostname = re.sub("^https?://", "", self.__registry)
+			config = json.load(f)
 			try:
-				auth = json.load(f)['auths'][hostname]['auth']
+				auth = config['auths'][hostname]['auth']
 				if auth:
-					return base64.b64decode(auth).decode('iso-8859-1')
+					auth = base64.b64decode(auth).decode('iso-8859-1')
+			except	KeyError: pass
 			finally:
 				f.close()
-		except:	pass
+		except OSError: pass
+		return auth
 
 	# Convert date/time string in ISO-6801 format to date(1)
 	def __parse_date(self, ts):
