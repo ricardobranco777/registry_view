@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.8.7 by Ricardo Branco
+# v1.8.8 by Ricardo Branco
 #
 # MIT License
 
@@ -120,6 +120,7 @@ class DockerRegistryError(Exception): pass
 
 class DockerRegistryV2:
 	__tz = time.strftime('%Z')
+	__cached_manifest = {}
 
 	def __init__(self, registry, **args):
 		self.__c = Curl(**args)
@@ -183,11 +184,18 @@ class DockerRegistryV2:
 
 	def get_manifest(self, repo, tag, version):
 		assert version in (1, 2)
+		try:
+			manifest = self.__cached_manifest[repo + ":" + tag][version]
+			if manifest:
+				return manifest
+		except	KeyError:
+			self.__cached_manifest = { repo + ":" + tag: [ '', '', '' ] }
 		info = self.__get(repo + "/manifests/" + tag,
 			["Accept: application/vnd.docker.distribution.manifest.v" + str(version) + "+json"])
 		data = json.loads(info)
 		if info.startswith('{"errors":'):
 			raise DockerRegistryError(data['errors'][0]['message'])
+		self.__cached_manifest[repo + ":" + tag][version] = data
 		return data
 
 	def get_image_info(self, repo, tag):
@@ -225,7 +233,7 @@ class DockerRegistryV2:
 		manifest = self.get_manifest(repo, tag, 2)
 		for i in range(0, len(manifest['layers'])):
 			size += manifest['layers'][i]['size']
-		return size
+		return	size
 
 def main():
 	parser = argparse.ArgumentParser(usage=usage, add_help=False)
