@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.10 by Ricardo Branco
+# v1.10.1 by Ricardo Branco
 #
 # MIT License
 
@@ -171,6 +171,9 @@ class DockerRegistryV2:
 			if auth_method.startswith('Basic '):
 				auth = input('Username: ') + ":" + getpass('Password: ')
 				self.__c.c.setopt(pycurl.USERPWD, auth)
+			else:
+				print('ERROR: Unsupported authentication method: ' + auth_method, file=sys.stderr)
+				sys.exit(1)
 			if self.__get("") == {}:
 				return
 		if http_code == 404:
