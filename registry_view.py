@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.9.6 by Ricardo Branco
+# v1.9.7 by Ricardo Branco
 #
 # MIT License
 
@@ -30,7 +30,7 @@ except	ImportError:
 if sys.version_info[0] < 3:
 	import subprocess
 
-version = "1.9.6"
+version = "1.9.7"
 
 usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -144,10 +144,14 @@ class DockerRegistryV2:
 		self.__check_registry()
 
 	def __get(self, url, headers=[]):
-		data = json.loads(self.__c.get(self.__registry + "/v2/" + url, headers))
-		if data.get('errors'):
-			raise DockerRegistryError(data['errors'][0]['message'])
-		return data
+		while True:
+			data = json.loads(self.__c.get(self.__registry + "/v2/" + url, headers))
+			if self.__c.get_http_code() == 429:	# Too many requests
+				time.sleep(0.1)
+			elif data.get('errors'):
+				raise DockerRegistryError(data['errors'][0]['message'])
+			else:
+				return data
 
 	def __check_registry(self):
 		if self.__get("") == {}:
