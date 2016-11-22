@@ -30,9 +30,10 @@ except	ImportError:
 if sys.version_info[0] < 3:
 	import subprocess
 
+progname = os.path.basename(sys.argv[0])
 version = "1.9.8"
 
-usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
+usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
 	-c, --cert CERT		Client certificate file name
 	-k, --key  KEY		Client private key file name
@@ -59,7 +60,7 @@ class Curl:
 		if opts['verbose'] and opts['verbose'] > 1:
 			self.c.setopt(pycurl.DEBUGFUNCTION, self.__debug_function)
 		self.c.setopt(pycurl.HEADERFUNCTION, self.__header_function)
-		self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (os.path.basename(sys.argv[0]), version, pycurl.version))
+		self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
 
 	def __del__(self):
 		self.c.close()
