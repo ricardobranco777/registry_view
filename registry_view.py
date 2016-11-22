@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.9.7 by Ricardo Branco
+# v1.9.8 by Ricardo Branco
 #
 # MIT License
 
@@ -30,7 +30,7 @@ except	ImportError:
 if sys.version_info[0] < 3:
 	import subprocess
 
-version = "1.9.7"
+version = "1.9.8"
 
 usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -59,7 +59,7 @@ class Curl:
 		if opts['verbose'] and opts['verbose'] > 1:
 			self.c.setopt(pycurl.DEBUGFUNCTION, self.__debug_function)
 		self.c.setopt(pycurl.HEADERFUNCTION, self.__header_function)
-		self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (sys.argv[0], version, pycurl.version))
+		self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (os.path.basename(sys.argv[0]), version, pycurl.version))
 
 	def __del__(self):
 		self.c.close()
@@ -86,7 +86,7 @@ class Curl:
 		# Break the header line into header name and value.
 		name, value = header_line.split(':', 1)
 		# Remove whitespace that may be present.
-		name = name.strip()
+		name = name.strip().lower()
 		value = value.strip()
 		self.headers[name] = value
 
@@ -113,7 +113,7 @@ class Curl:
 
 	def get_charset(self):
 		try:
-			match = re.search('charset=(\S+)', self.headers['Content-Type'])
+			match = re.search('charset=(\S+)', self.headers['content-type'])
 			if match:
 				return match.group(1)
 		except	KeyError:
@@ -145,7 +145,11 @@ class DockerRegistryV2:
 
 	def __get(self, url, headers=[]):
 		while True:
-			data = json.loads(self.__c.get(self.__registry + "/v2/" + url, headers))
+			body = self.__c.get(self.__registry + "/v2/" + url, headers)
+			try:
+				data = json.loads(body)
+			except	ValueError:
+				return body
 			if self.__c.get_http_code() == 429:	# Too many requests
 				time.sleep(0.1)
 			elif data.get('errors'):
@@ -203,7 +207,7 @@ class DockerRegistryV2:
 	def __get_paginated(self, s):
 		elements = []
 		while True:
-			url = self.__c.get_headers('Link')
+			url = self.__c.get_headers('link')
 			if not url:
 				break
 			m = re.match('</v2/(.*)>; rel="next"', url)
