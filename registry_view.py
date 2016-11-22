@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.9.8 by Ricardo Branco
+# v1.9.9 by Ricardo Branco
 #
 # MIT License
 
@@ -29,9 +29,10 @@ except	ImportError:
 
 if sys.version_info[0] < 3:
 	import subprocess
+	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.9.8"
+version = "1.9.9"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -162,6 +163,13 @@ class DockerRegistryV2:
 		if self.__get("") == {}:
 			return
 		http_code = self.__c.get_http_code()
+		if http_code == 401:
+			auth_method = self.__c.get_headers('www-authenticate')
+			if auth_method.startswith('Basic '):
+				auth = input('Username: ') + ":" + getpass('Password: ')
+				self.__c.c.setopt(pycurl.USERPWD, auth)
+			if self.__get("") == {}:
+				return
 		if http_code == 404:
 			error = 'Invalid v2 Docker Registry: ' + self.__registry
 		else:
