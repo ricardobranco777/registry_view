@@ -2,7 +2,9 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.9.4 by Ricardo Branco
+# Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
+#
+# v1.9.5 by Ricardo Branco
 #
 # MIT License
 
@@ -28,7 +30,7 @@ except	ImportError:
 if sys.version_info[0] < 3:
 	import subprocess
 
-version = "1.9.4"
+version = "1.9.5"
 
 usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -187,18 +189,31 @@ class DockerRegistryV2:
 		s = datetime.fromtimestamp(timegm(time.strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))).ctime()
 		return s[:-4] + self.__tz + s[-5:]
 
+	# Get paginated results when the Registry is too large
+	def __get_paginated(self, s):
+		elements = []
+		while True:
+			url = self.__c.get_headers().get('Link')
+			if not url:
+				break
+			m = re.match('</v2/(.*)>; rel="next"', url)
+			url = m.group(1)
+			data = json.loads(self.__get(url))
+			elements += data[s]
+		return	elements
+
 	def get_repositories(self):
 		data = json.loads(self.__get("_catalog"))
-		data['repositories'].sort()
-		return data['repositories']
+		repositories = data['repositories'] + self.__get_paginated('repositories')
+		return repositories
 
 	def get_tags(self, repo):
-		info = self.__get(repo + "/tags/list")
-		data = json.loads(info)
-		if info.startswith('{"errors":'):
+		data = json.loads(self.__get(repo + "/tags/list"))
+		if data.get('errors'):
 			raise DockerRegistryError(data['errors'][0]['message'])
-		data['tags'].sort()
-		return data['tags']
+		tags = data['tags'] + self.__get_paginated('tags')
+		tags.sort()
+		return tags
 
 	def get_manifest(self, repo, tag, version):
 		assert version in (1, 2)
@@ -209,10 +224,9 @@ class DockerRegistryV2:
 				return manifest
 		except	KeyError:
 			self.__cached_manifest = { image: ['', '', ''] }
-		info = self.__get(repo + "/manifests/" + tag,
-			["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)])
-		data = json.loads(info)
-		if info.startswith('{"errors":'):
+		data = json.loads(self.__get(repo + "/manifests/" + tag,
+			["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)]))
+		if data.get('errors'):
 			raise DockerRegistryError(data['errors'][0]['message'])
 		self.__cached_manifest[image][version] = data
 		return data
