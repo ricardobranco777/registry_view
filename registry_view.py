@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.9.3 by Ricardo Branco
+# v1.9.4 by Ricardo Branco
 #
 # MIT License
 
@@ -28,7 +28,8 @@ except	ImportError:
 if sys.version_info[0] < 3:
 	import subprocess
 
-version = "1.9.3"
+version = "1.9.4"
+
 usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
 	-c, --cert CERT		Client certificate file name
@@ -207,7 +208,7 @@ class DockerRegistryV2:
 			if manifest:
 				return manifest
 		except	KeyError:
-			self.__cached_manifest[image] = {}
+			self.__cached_manifest = { image: ['', '', ''] }
 		info = self.__get(repo + "/manifests/" + tag,
 			["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)])
 		data = json.loads(info)
