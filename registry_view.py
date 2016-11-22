@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.9.9 by Ricardo Branco
+# v1.10 by Ricardo Branco
 #
 # MIT License
 
@@ -32,7 +32,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.9.9"
+version = "1.10"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -152,8 +152,11 @@ class DockerRegistryV2:
 				data = json.loads(body)
 			except	ValueError:
 				return body
-			if self.__c.get_http_code() == 429:	# Too many requests
+			http_code = self.__c.get_http_code()
+			if http_code == 429:	# Too many requests
 				time.sleep(0.1)
+			elif http_code == 401:
+				return body
 			elif data.get('errors'):
 				raise DockerRegistryError(data['errors'][0]['message'])
 			else:
