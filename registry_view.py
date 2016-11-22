@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.9.5 by Ricardo Branco
+# v1.9.6 by Ricardo Branco
 #
 # MIT License
 
@@ -30,7 +30,7 @@ except	ImportError:
 if sys.version_info[0] < 3:
 	import subprocess
 
-version = "1.9.5"
+version = "1.9.6"
 
 usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -105,8 +105,11 @@ class Curl:
 		buf.close()
 		return body.decode(self.get_charset())
 
-	def get_headers(self):
-		return self.headers
+	def get_headers(self, key=None):
+		if key:
+			return self.headers.get(key)
+		else:
+			return self.headers
 
 	def get_charset(self):
 		try:
@@ -141,16 +144,19 @@ class DockerRegistryV2:
 		self.__check_registry()
 
 	def __get(self, url, headers=[]):
-		return self.__c.get(self.__registry + "/v2/" + url, headers)
+		data = json.loads(self.__c.get(self.__registry + "/v2/" + url, headers))
+		if data.get('errors'):
+			raise DockerRegistryError(data['errors'][0]['message'])
+		return data
 
 	def __check_registry(self):
-		if self.__get("") == "{}":
+		if self.__get("") == {}:
 			return
 		http_code = self.__c.get_http_code()
 		if http_code == 404:
 			error = 'Invalid v2 Docker Registry: ' + self.__registry
 		else:
-			error = self.__c.get_headers().get('HTTP_STATUS')
+			error = self.__c.get_headers('HTTP_STATUS')
 			if not error:
 				error = "Invalid HTTP server"
 		print('ERROR: ' + error, file=sys.stderr)
@@ -193,24 +199,22 @@ class DockerRegistryV2:
 	def __get_paginated(self, s):
 		elements = []
 		while True:
-			url = self.__c.get_headers().get('Link')
+			url = self.__c.get_headers('Link')
 			if not url:
 				break
 			m = re.match('</v2/(.*)>; rel="next"', url)
 			url = m.group(1)
-			data = json.loads(self.__get(url))
+			data = self.__get(url)
 			elements += data[s]
 		return	elements
 
 	def get_repositories(self):
-		data = json.loads(self.__get("_catalog"))
+		data = self.__get("_catalog")
 		repositories = data['repositories'] + self.__get_paginated('repositories')
 		return repositories
 
 	def get_tags(self, repo):
-		data = json.loads(self.__get(repo + "/tags/list"))
-		if data.get('errors'):
-			raise DockerRegistryError(data['errors'][0]['message'])
+		data = self.__get(repo + "/tags/list")
 		tags = data['tags'] + self.__get_paginated('tags')
 		tags.sort()
 		return tags
@@ -224,10 +228,7 @@ class DockerRegistryV2:
 				return manifest
 		except	KeyError:
 			self.__cached_manifest = { image: ['', '', ''] }
-		data = json.loads(self.__get(repo + "/manifests/" + tag,
-			["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)]))
-		if data.get('errors'):
-			raise DockerRegistryError(data['errors'][0]['message'])
+		data = self.__get(repo + "/manifests/" + tag, ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)])
 		self.__cached_manifest[image][version] = data
 		return data
 
