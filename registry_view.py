@@ -2,7 +2,7 @@
 #
 # Script to visualize the contents of a Docker Registry v2 using the API via curl
 #
-# v1.9.2 by Ricardo Branco
+# v1.9.3 by Ricardo Branco
 #
 # MIT License
 
@@ -28,7 +28,7 @@ except	ImportError:
 if sys.version_info[0] < 3:
 	import subprocess
 
-version = "1.9.2"
+version = "1.9.3"
 usage = "\rUsage: " + os.path.basename(sys.argv[0]) + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
 	-c, --cert CERT		Client certificate file name
@@ -165,6 +165,11 @@ class DockerRegistryV2:
 				try_registry += [try_registry[0] + ':443']
 			elif self.__registry.startswith('http://'):
 				try_registry += [try_registry[0] + ':80']
+		else:
+			if self.__registry.startswith('https://'):
+				try_registry += [try_registry[0][:-len(':443')]]
+			elif self.__registry.startswith('http://'):
+				try_registry += [try_registry[0][:-len(':80')]]
 		for registry in try_registry:
 			try:
 				auth = config['auths'][registry]['auth']
