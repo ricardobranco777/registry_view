@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.10.1 by Ricardo Branco
+# v1.10.2 by Ricardo Branco
 #
 # MIT License
 
@@ -145,37 +145,44 @@ class DockerRegistryV2:
 		self.__c.c.setopt(pycurl.USERPWD, args['user'])
 		self.__check_registry()
 
+	def __auth_basic(self):
+		auth = input('Username: ') + ":" + getpass('Password: ')
+		self.__c.c.setopt(pycurl.USERPWD, auth)
+
+	def __auth_token(self):
+		pass	# XXX
+
 	def __get(self, url, headers=[]):
+		tries = 1
 		while True:
 			body = self.__c.get(self.__registry + "/v2/" + url, headers)
-			try:
-				data = json.loads(body)
-			except	ValueError:
-				return body
 			http_code = self.__c.get_http_code()
 			if http_code == 429:	# Too many requests
 				time.sleep(0.1)
-			elif http_code == 401:
-				return body
-			elif data.get('errors'):
-				raise DockerRegistryError(data['errors'][0]['message'])
+			elif http_code == 401 and tries > 0:
+				auth_method = self.__c.get_headers('www-authenticate')
+				if auth_method.startswith('Basic '):
+					self.__auth_basic()
+				elif auth_method.startswith('Bearer '):
+					self.__auth_token()
+				else:
+					print('ERROR: Unsupported authentication method: ' + auth_method, file=sys.stderr)
+					sys.exit(1)
 			else:
-				return data
+				try:
+					data = json.loads(body)
+				except	ValueError:
+					return body
+				if data.get('errors'):
+					raise DockerRegistryError(data['errors'][0]['message'])
+				else:
+					return data
+			tries -= 1
 
 	def __check_registry(self):
 		if self.__get("") == {}:
 			return
 		http_code = self.__c.get_http_code()
-		if http_code == 401:
-			auth_method = self.__c.get_headers('www-authenticate')
-			if auth_method.startswith('Basic '):
-				auth = input('Username: ') + ":" + getpass('Password: ')
-				self.__c.c.setopt(pycurl.USERPWD, auth)
-			else:
-				print('ERROR: Unsupported authentication method: ' + auth_method, file=sys.stderr)
-				sys.exit(1)
-			if self.__get("") == {}:
-				return
 		if http_code == 404:
 			error = 'Invalid v2 Docker Registry: ' + self.__registry
 		else:
