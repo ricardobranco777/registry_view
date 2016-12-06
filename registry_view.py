@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.10.2 by Ricardo Branco
+# v1.11 by Ricardo Branco
 #
 # MIT License
 
@@ -23,6 +23,11 @@ except	ImportError:
 	sys.exit(1)
 
 try:
+	from urllib.parse import urlencode
+except ImportError:
+	from urllib import urlencode
+
+try:
 	from io import BytesIO
 except	ImportError:
 	from StringIO import StringIO as BytesIO
@@ -32,7 +37,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.10"
+version = "1.11"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -49,6 +54,7 @@ Note: Default PORT is 443. You must prepend "http://" to REGISTRY if running on 
 class Curl:
 	def __init__(self, **opts):
 		self.c = pycurl.Curl()
+		self.p = pycurl.Curl()
 		curlopts = [('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('verbose', pycurl.VERBOSE)]
 		if hasattr(pycurl, 'KEYPASSWD'):
 			curlopts += [('pass', pycurl.KEYPASSWD)]	# Option added to PyCurl 7.21.5
@@ -58,13 +64,20 @@ class Curl:
 			if opts[opt]:
 				self.c.setopt(curlopt, opts[opt])
 		self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
-		if opts['verbose'] and opts['verbose'] > 1:
-			self.c.setopt(pycurl.DEBUGFUNCTION, self.__debug_function)
+		self.p.setopt(pycurl.SSL_VERIFYPEER, 0)
+		if opts['verbose']:
+			self.p.setopt(pycurl.VERBOSE, opts['verbose'])
+			if opts['verbose'] > 1:
+				self.c.setopt(pycurl.DEBUGFUNCTION, self.__debug_function)
+				self.p.setopt(pycurl.DEBUGFUNCTION, self.__debug_function)
 		self.c.setopt(pycurl.HEADERFUNCTION, self.__header_function)
+		self.p.setopt(pycurl.HEADERFUNCTION, self.__header_function)
 		self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
+		self.p.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
 
 	def __del__(self):
 		self.c.close()
+		self.p.close()
 
 	def __debug_function(self, t, m):
 		# Mimic Curl debug output
@@ -107,6 +120,21 @@ class Curl:
 		buf.close()
 		return body.decode(self.get_charset())
 
+	def post(self, url, post_data):
+		buf = BytesIO()
+		self.p.setopt(pycurl.URL, url)
+		self.p.setopt(pycurl.WRITEDATA, buf)
+		post_data = urlencode(post_data)
+		self.p.setopt(pycurl.POSTFIELDS, post_data)
+		try:
+			self.p.perform()
+		except	pycurl.error as err:
+			print(self.p.errstr(), file=sys.stderr)
+			sys.exit(err.args[0])
+		body = buf.getvalue()
+		buf.close()
+		return body.decode('utf-8')
+
 	def get_headers(self, key=None):
 		if key:
 			return self.headers.get(key)
@@ -143,14 +171,23 @@ class DockerRegistryV2:
 		else:
 			args['user'] = self.__get_creds()
 		self.__c.c.setopt(pycurl.USERPWD, args['user'])
+		self.__c.p.setopt(pycurl.USERPWD, args['user'])
 		self.__check_registry()
 
 	def __auth_basic(self):
 		auth = input('Username: ') + ":" + getpass('Password: ')
 		self.__c.c.setopt(pycurl.USERPWD, auth)
+		self.__c.p.setopt(pycurl.USERPWD, auth)
 
-	def __auth_token(self):
-		pass	# XXX
+	def __auth_token(self, response_header):
+		m = re.match('Bearer realm="([^"]+)",service="([^"]+)"(?:,scope="([^"]+)")?.*', response_header)
+		url = m.group(1)
+		fields = {}
+		fields['service'] = m.group(2)
+		if m.group(3):
+			fields['scope'] = m.group(3)
+		auth = json.loads(self.__c.post(url, fields))['token']
+		return ['Authorization: Bearer ' + auth]
 
 	def __get(self, url, headers=[]):
 		tries = 1
@@ -161,10 +198,10 @@ class DockerRegistryV2:
 				time.sleep(0.1)
 			elif http_code == 401 and tries > 0:
 				auth_method = self.__c.get_headers('www-authenticate')
-				if auth_method.startswith('Basic '):
+				if not auth_method or auth_method.startswith('Basic '):
 					self.__auth_basic()
 				elif auth_method.startswith('Bearer '):
-					self.__auth_token()
+					headers = list(headers + self.__auth_token(auth_method))
 				else:
 					print('ERROR: Unsupported authentication method: ' + auth_method, file=sys.stderr)
 					sys.exit(1)
