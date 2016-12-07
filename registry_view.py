@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.12.1 by Ricardo Branco
+# v1.12.2 by Ricardo Branco
 #
 # MIT License
 
@@ -37,7 +37,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.12.1"
+version = "1.12.2"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -184,9 +184,10 @@ class DockerRegistryV2:
 		m = re.match('Bearer realm="([^"]+)",service="([^"]+)"(?:,scope="([^"]+)")?.*', response_header)
 		url = m.group(1)
 		fields = {}
-		fields['service'] = m.group(2)
-		if m.group(3):
-			fields['scope'] = m.group(3)
+		for field in ("service", "scope", "account"):
+			m = re.match('Bearer realm="(?:[^"]+)".*,' + field + '="([^"]+)"', response_header)
+			if m:
+				fields[field] = m.group(1)
 		if use_post:
 			token = json.loads(self.__c.post(url, fields, auth=self.__auth_basic()))['token']
 		else:
