@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.11.1 by Ricardo Branco
+# v1.11.2 by Ricardo Branco
 #
 # MIT License
 
@@ -37,7 +37,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.11.1"
+version = "1.11.2"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -74,8 +74,12 @@ class Curl:
 		self.p.setopt(pycurl.HEADERFUNCTION, self.__header_function)
 		self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
 		self.p.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
+		self.buf = BytesIO()
+		self.c.setopt(pycurl.WRITEDATA, self.buf)
+		self.p.setopt(pycurl.WRITEDATA, self.buf)
 
 	def __del__(self):
+		self.buf.close()
 		self.c.close()
 		self.p.close()
 
@@ -104,24 +108,23 @@ class Curl:
 		self.headers[name] = value
 
 	def get(self, url, headers=[]):
-		buf = BytesIO()
 		self.headers = {}
+		self.buf.seek(0)
+		self.buf.truncate()
 		self.c.setopt(pycurl.URL, url)
-		self.c.setopt(pycurl.WRITEDATA, buf)
 		self.c.setopt(pycurl.HTTPHEADER, headers)
 		try:
 			self.c.perform()
 		except	pycurl.error as err:
 			print(self.c.errstr(), file=sys.stderr)
 			sys.exit(err.args[0])
-		body = buf.getvalue()
-		buf.close()
+		body = self.buf.getvalue()
 		return body.decode(self.get_charset())
 
 	def post(self, url, post_data):
-		buf = BytesIO()
+		self.buf.seek(0)
+		self.buf.truncate()
 		self.p.setopt(pycurl.URL, url)
-		self.p.setopt(pycurl.WRITEDATA, buf)
 		post_data = urlencode(post_data)
 		self.p.setopt(pycurl.POSTFIELDS, post_data)
 		try:
@@ -129,8 +132,7 @@ class Curl:
 		except	pycurl.error as err:
 			print(self.p.errstr(), file=sys.stderr)
 			sys.exit(err.args[0])
-		body = buf.getvalue()
-		buf.close()
+		body = self.buf.getvalue()
 		return body.decode(self.get_charset())
 
 	def get_headers(self, key=None):
