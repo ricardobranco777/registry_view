@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.11.3 by Ricardo Branco
+# v1.12 by Ricardo Branco
 #
 # MIT License
 
@@ -37,7 +37,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.11.3"
+version = "1.12"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -54,7 +54,6 @@ Note: Default PORT is 443. You must prepend "http://" to REGISTRY if running on 
 class Curl:
 	def __init__(self, **opts):
 		self.c = pycurl.Curl()
-		self.p = pycurl.Curl()
 		curlopts = [('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('verbose', pycurl.VERBOSE)]
 		if hasattr(pycurl, 'KEYPASSWD'):
 			curlopts += [('pass', pycurl.KEYPASSWD)]	# Option added to PyCurl 7.21.5
@@ -64,24 +63,17 @@ class Curl:
 			if opts[opt]:
 				self.c.setopt(curlopt, opts[opt])
 		self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
-		self.p.setopt(pycurl.SSL_VERIFYPEER, 0)
 		if opts['verbose']:
-			self.p.setopt(pycurl.VERBOSE, opts['verbose'])
 			if opts['verbose'] > 1:
 				self.c.setopt(pycurl.DEBUGFUNCTION, self.__debug_function)
-				self.p.setopt(pycurl.DEBUGFUNCTION, self.__debug_function)
 		self.c.setopt(pycurl.HEADERFUNCTION, self.__header_function)
-		self.p.setopt(pycurl.HEADERFUNCTION, self.__header_function)
 		self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
-		self.p.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
 		self.buf = BytesIO()
 		self.c.setopt(pycurl.WRITEDATA, self.buf)
-		self.p.setopt(pycurl.WRITEDATA, self.buf)
 
 	def __del__(self):
 		self.buf.close()
 		self.c.close()
-		self.p.close()
 
 	def __debug_function(self, t, m):
 		# Mimic Curl debug output
@@ -114,6 +106,7 @@ class Curl:
 		self.buf.seek(0)
 		self.buf.truncate()
 		self.c.setopt(pycurl.URL, url)
+		self.c.setopt(pycurl.HTTPGET, 1)
 		self.c.setopt(pycurl.HTTPHEADER, headers)
 		try:
 			self.c.perform()
@@ -123,16 +116,20 @@ class Curl:
 		body = self.buf.getvalue()
 		return body.decode(self.get_charset())
 
-	def post(self, url, post_data):
+	def post(self, url, post_data, auth=None):
 		self.buf.seek(0)
 		self.buf.truncate()
-		self.p.setopt(pycurl.URL, url)
+		self.c.setopt(pycurl.URL, url)
+		self.c.setopt(pycurl.POST, 1)
 		post_data = urlencode(post_data)
-		self.p.setopt(pycurl.POSTFIELDS, post_data)
+		self.c.setopt(pycurl.POSTFIELDS, post_data)
+		if auth:
+			self.c.setopt(pycurl.HTTPHEADER, auth)
+			self.c.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
 		try:
-			self.p.perform()
+			self.c.perform()
 		except	pycurl.error as err:
-			print(self.p.errstr(), file=sys.stderr)
+			print(self.c.errstr(), file=sys.stderr)
 			sys.exit(err.args[0])
 		body = self.buf.getvalue()
 		return body.decode(self.get_charset())
@@ -160,6 +157,7 @@ class DockerRegistryError(Exception): pass
 class DockerRegistryV2:
 	__tz = time.strftime('%Z')
 	__cached_manifest = {}
+	__basic_auth = ""
 
 	def __init__(self, registry, **args):
 		self.__c = Curl(**args)
@@ -173,13 +171,15 @@ class DockerRegistryV2:
 		else:
 			args['user'] = self.__get_creds()
 		self.__c.c.setopt(pycurl.USERPWD, args['user'])
-		self.__c.p.setopt(pycurl.USERPWD, args['user'])
+		self.__c.c.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
+		self.__basic_auth = str(base64.b64encode(args['user'].encode()).decode('ascii'))
 		self.__check_registry()
 
 	def __auth_basic(self):
-		auth = input('Username: ') + ":" + getpass('Password: ')
-		self.__c.c.setopt(pycurl.USERPWD, auth)
-		self.__c.p.setopt(pycurl.USERPWD, auth)
+		if not self.__basic_auth:
+			userpass = input('Username: ') + ":" + getpass('Password: ')
+			self.__basic_auth = str(base64.b64encode(userpass.encode()).decode('ascii'))
+		return ['Authorization: Basic ' + self.__basic_auth]
 
 	def __auth_token(self, response_header):
 		m = re.match('Bearer realm="([^"]+)",service="([^"]+)"(?:,scope="([^"]+)")?.*', response_header)
@@ -188,7 +188,7 @@ class DockerRegistryV2:
 		fields['service'] = m.group(2)
 		if m.group(3):
 			fields['scope'] = m.group(3)
-		auth = json.loads(self.__c.post(url, fields))['token']
+		auth = json.loads(self.__c.post(url, fields, self.__auth_basic()))['token']
 		return ['Authorization: Bearer ' + auth]
 
 	def __get(self, url, headers=[]):
@@ -198,12 +198,14 @@ class DockerRegistryV2:
 			http_code = self.__c.get_http_code()
 			if http_code == 429:	# Too many requests
 				time.sleep(0.1)
+				continue
 			elif http_code == 401 and tries > 0:
+				headers = headers[:]
 				auth_method = self.__c.get_headers('www-authenticate')
 				if not auth_method or auth_method.startswith('Basic '):
-					self.__auth_basic()
+					headers += self.__auth_basic()
 				elif auth_method.startswith('Bearer '):
-					headers = list(headers + self.__auth_token(auth_method))
+					headers += self.__auth_token(auth_method)
 				else:
 					print('ERROR: Unsupported authentication method: ' + auth_method, file=sys.stderr)
 					sys.exit(1)
