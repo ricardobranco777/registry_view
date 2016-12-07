@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.12 by Ricardo Branco
+# v1.12.1 by Ricardo Branco
 #
 # MIT License
 
@@ -37,7 +37,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.12"
+version = "1.12.1"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -101,13 +101,15 @@ class Curl:
 		value = value.strip()
 		self.headers[name] = value
 
-	def get(self, url, headers=[]):
+	def get(self, url, headers=[], auth=None):
 		self.headers = {}
 		self.buf.seek(0)
 		self.buf.truncate()
 		self.c.setopt(pycurl.URL, url)
 		self.c.setopt(pycurl.HTTPGET, 1)
 		self.c.setopt(pycurl.HTTPHEADER, headers)
+		if auth:
+			self.c.setopt(pycurl.HTTPHEADER, auth)
 		try:
 			self.c.perform()
 		except	pycurl.error as err:
@@ -125,7 +127,6 @@ class Curl:
 		self.c.setopt(pycurl.POSTFIELDS, post_data)
 		if auth:
 			self.c.setopt(pycurl.HTTPHEADER, auth)
-			self.c.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
 		try:
 			self.c.perform()
 		except	pycurl.error as err:
@@ -170,8 +171,6 @@ class DockerRegistryV2:
 				args['user'] += ":" + getpass("Password: ")
 		else:
 			args['user'] = self.__get_creds()
-		self.__c.c.setopt(pycurl.USERPWD, args['user'])
-		self.__c.c.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
 		self.__basic_auth = str(base64.b64encode(args['user'].encode()).decode('ascii'))
 		self.__check_registry()
 
@@ -181,15 +180,19 @@ class DockerRegistryV2:
 			self.__basic_auth = str(base64.b64encode(userpass.encode()).decode('ascii'))
 		return ['Authorization: Basic ' + self.__basic_auth]
 
-	def __auth_token(self, response_header):
+	def __auth_token(self, response_header, use_post=True):
 		m = re.match('Bearer realm="([^"]+)",service="([^"]+)"(?:,scope="([^"]+)")?.*', response_header)
 		url = m.group(1)
 		fields = {}
 		fields['service'] = m.group(2)
 		if m.group(3):
 			fields['scope'] = m.group(3)
-		auth = json.loads(self.__c.post(url, fields, self.__auth_basic()))['token']
-		return ['Authorization: Bearer ' + auth]
+		if use_post:
+			token = json.loads(self.__c.post(url, fields, auth=self.__auth_basic()))['token']
+		else:
+			url += '?' + urlencode(fields)
+			token = json.loads(self.__c.get(url, auth=self.__auth_basic()))['token']
+		return ['Authorization: Bearer ' + token]
 
 	def __get(self, url, headers=[]):
 		tries = 1
