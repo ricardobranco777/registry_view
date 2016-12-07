@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.11.2 by Ricardo Branco
+# v1.11.3 by Ricardo Branco
 #
 # MIT License
 
@@ -37,7 +37,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.11.2"
+version = "1.11.3"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -99,6 +99,8 @@ class Curl:
 		header_line = header_line.decode('iso-8859-1')
 		# Header lines include the first status line (HTTP/1.x ...)
 		if ':' not in header_line:
+			if not self.headers.get('HTTP_STATUS'):
+				self.headers['HTTP_STATUS'] = header_line.strip()
 			return
 		# Break the header line into header name and value.
 		name, value = header_line.split(':', 1)
@@ -223,7 +225,7 @@ class DockerRegistryV2:
 		if http_code == 404:
 			error = 'Invalid v2 Docker Registry: ' + self.__registry
 		else:
-			error = self.__c.getinfo(pycurl.RESPONSE_CODE)
+			error = self.__c.get_headers('HTTP_STATUS')
 			if not error:
 				error = "Invalid HTTP server"
 		print('ERROR: ' + error, file=sys.stderr)
