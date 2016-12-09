@@ -4,7 +4,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.12.2 by Ricardo Branco
+# v1.12.3 by Ricardo Branco
 #
 # MIT License
 
@@ -37,7 +37,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.12.2"
+version = "1.12.3"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -169,9 +169,10 @@ class DockerRegistryV2:
 		if args['user']:
 			if not ':' in args['user']:
 				args['user'] += ":" + getpass("Password: ")
+		if args['user']:
+			self.__basic_auth = str(base64.b64encode(args['user'].encode()).decode('ascii'))
 		else:
-			args['user'] = self.__get_creds()
-		self.__basic_auth = str(base64.b64encode(args['user'].encode()).decode('ascii'))
+			self.__basic_auth = self.__get_creds()
 		self.__check_registry()
 
 	def __auth_basic(self):
@@ -258,7 +259,6 @@ class DockerRegistryV2:
 			try:
 				auth = config['auths'][registry]['auth']
 				if auth:
-					auth = base64.b64decode(auth).decode('iso-8859-1')
 					break
 			except	KeyError:
 				pass
