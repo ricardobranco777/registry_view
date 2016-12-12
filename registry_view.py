@@ -182,7 +182,7 @@ class DockerRegistryV2:
 		return ['Authorization: Basic ' + self.__basic_auth]
 
 	def __auth_token(self, response_header, use_post=True):
-		m = re.match('Bearer realm="([^"]+)",service="([^"]+)"(?:,scope="([^"]+)")?.*', response_header)
+		m = re.match('Bearer realm="([^"]+)".*', response_header)
 		url = m.group(1)
 		fields = {}
 		for field in ("service", "scope", "account"):
