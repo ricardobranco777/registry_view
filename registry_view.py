@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 #
-# Script to visualize the contents of a Docker Registry v2 using the API via curl
+# Script to visualize the contents of a Docker Registry v2 using the API with PyCurl
+#
+# Additional support for AWS EC2 Container Registry with Boto3 (pip install boto3)
+# See https://github.com/boto/boto3 for configuration details
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.12.3 by Ricardo Branco
+# v1.13 by Ricardo Branco
 #
 # MIT License
 
@@ -37,7 +40,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.12.3"
+version = "1.13"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -153,12 +156,73 @@ class Curl:
 	def get_http_code(self):
 		return self.c.getinfo(pycurl.HTTP_CODE)
 
+# Reference:
+# https://boto3.readthedocs.io/en/latest/reference/services/ecr.html
+class DockerRegistryECR:
+	__image_info = {}
+
+	def __init__(self, registry):
+		try:
+			import boto3
+		except	ImportError:
+			print("WARNING: Install the latest Python boto3 library to AWS ECR. Use: pip install boto3", file=sys.stderr)
+			raise ImportError
+		self.__c = boto3.client('ecr')
+		m = re.search("^(?:https?://)?([0-9]{12})\.*", registry)
+		self.__registryId = m.group(1)
+
+	def __get_repositories(self, data):
+		repos = []
+		for i in range(len(data) - 1, -1, -1):
+			repos += [data[i]['repositoryName']]
+		return	repos
+
+	def __get_tags(self, data, repo):
+		tags = []
+		for i in range(len(data) - 1, -1, -1):
+			tags += data[i]['imageTags']
+		return	tags
+
+	def get_auth(self):
+		auth = self.__c.get_authorization_token(registryIds=[self.__registryId,])
+		return auth['authorizationData'][0]['authorizationToken']
+
+	def get_repositories(self):
+		paginator = self.__c.get_paginator('describe_repositories')
+		iterator = paginator.paginate(registryId=self.__registryId)
+		repositories = []
+		for response in iterator:
+			repositories += self.__get_repositories(response['repositories'])
+		return	repositories
+
+	def get_tags(self, repo):
+		tags = []
+		image_filter = {'tagStatus': 'TAGGED'}
+		paginator = self.__c.get_paginator('describe_images')
+		iterator = paginator.paginate(registryId=self.__registryId, repositoryName=repo, filter=image_filter)
+		for response in iterator:
+			tags += self.__get_tags(response['imageDetails'], repo)
+		return	tags
+
+	def get_info(self, repo, tag):
+		info = {}
+		data = self.__c.describe_images(registryId=self.__registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
+		data = data['imageDetails'][0]
+		info['Digest'] = data['imageDigest']
+		info['CompressedSize'] = data['imageSizeInBytes']
+		return info
+
+	def get_manifest(self, repo, tag):
+		data = self.__c.batch_get_image(registryId=self.__registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
+		return data['images'][0]['imageManifest']
+
 class DockerRegistryError(Exception): pass
 
 class DockerRegistryV2:
 	__tz = time.strftime('%Z')
 	__cached_manifest = {}
 	__basic_auth = ""
+	__aws_ecr = None
 
 	def __init__(self, registry, **args):
 		self.__c = Curl(**args)
@@ -166,6 +230,16 @@ class DockerRegistryV2:
 		# Assume https:// by default
 		if not re.match("https?://", self.__registry):
 			self.__registry = "https://" + self.__registry
+		# Check for AWS EC2 Container Registry
+		if re.match("(?:https?://)?[0-9]{12}\.dkr\.ecr\.[a-z0-9]+[a-z0-9-]*\.amazonaws\.com(?::\d+)?$", self.__registry):
+			try:
+				self.__aws_ecr = DockerRegistryECR(self.__registry)
+				return
+			except	ImportError:
+				if not args['user']:
+					print('ERROR: Use the -u option with the credentials obtained from "aws ecr get-login"', file=sys.stderr)
+					sys.exit(1)
+		# Set credentials if specified or set in ~/.docker/config.json
 		if args['user']:
 			if not ':' in args['user']:
 				args['user'] += ":" + getpass("Password: ")
@@ -173,6 +247,7 @@ class DockerRegistryV2:
 			self.__basic_auth = str(base64.b64encode(args['user'].encode()).decode('ascii'))
 		else:
 			self.__basic_auth = self.__get_creds()
+		# Check Registry v2
 		self.__check_registry()
 
 	def __auth_basic(self):
@@ -226,7 +301,8 @@ class DockerRegistryV2:
 			tries -= 1
 
 	def __check_registry(self):
-		if self.__get("") == {}:
+		body = self.__get("")
+		if body == {} or body == "":
 			return
 		http_code = self.__c.get_http_code()
 		if http_code == 404:
@@ -270,6 +346,15 @@ class DockerRegistryV2:
 		s = datetime.fromtimestamp(timegm(time.strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))).ctime()
 		return s[:-4] + self.__tz + s[-5:]
 
+	def __pretty_size(self, size):
+		if size < 1024:
+			return str(size)
+		units = ('','K','M','G','T')
+		for n in (4,3,2,1):
+			if (size > 1024**n):
+				return "%.2f %cB" % ((float(size) / 1024**n), units[n])
+
+
 	# Get paginated results when the Registry is too large
 	def __get_paginated(self, s):
 		elements = []
@@ -284,11 +369,15 @@ class DockerRegistryV2:
 		return	elements
 
 	def get_repositories(self):
+		if self.__aws_ecr:
+			return self.__aws_ecr.get_repositories()
 		data = self.__get("_catalog")
 		repositories = data['repositories'] + self.__get_paginated('repositories')
 		return repositories
 
 	def get_tags(self, repo):
+		if self.__aws_ecr:
+			return self.__aws_ecr.get_tags(repo)
 		data = self.__get(repo + "/tags/list")
 		tags = data['tags'] + self.__get_paginated('tags')
 		tags.sort()
@@ -296,6 +385,12 @@ class DockerRegistryV2:
 
 	def get_manifest(self, repo, tag, version):
 		assert version in (1, 2)
+		headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)]
+		if self.__aws_ecr:
+			if version == 2:
+				return self.__aws_ecr.get_manifest(repo, tag)
+			else:
+				headers += ["Authorization: Basic " + self.__aws_ecr.get_auth()]
 		image = repo + ":" + tag
 		try:
 			manifest = self.__cached_manifest[image][version]
@@ -303,7 +398,7 @@ class DockerRegistryV2:
 				return manifest
 		except	KeyError:
 			self.__cached_manifest = { image: ['', '', ''] }
-		data = self.__get(repo + "/manifests/" + tag, ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)])
+		data = self.__get(repo + "/manifests/" + tag, headers=headers)
 		self.__cached_manifest[image][version] = data
 		return data
 
@@ -317,11 +412,22 @@ class DockerRegistryV2:
 		for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir'):
 			info[key] = data['config'].get(key)
 		# Before Docker 1.9.0, ID's were not digests but random bytes
-		if info['Docker_Version'] and int(info['Docker_Version'].replace('.', '')) >= 190:
+		info['Digest'] = "-"
+		if self.__aws_ecr:
+			info.update(self.__aws_ecr.get_info(repo, tag))
+		elif info['Docker_Version'] and int(info['Docker_Version'].replace('.', '')) >= 190:
 			manifest = self.get_manifest(repo, tag, 2)
-			info['Digest'] = manifest['config']['digest'].replace('sha256:', '')
-		else:
-			info['Digest'] = "-"
+			try:
+				info['Digest'] = manifest['config']['digest']
+			except	KeyError:
+				pass
+			# Calculate compressed size
+			size = 0
+			for i in range(0, len(manifest['layers'])):
+				size += manifest['layers'][i]['size']
+			info['CompressedSize'] = size
+		info['Digest'] = info['Digest'].replace('sha256:', '')
+		info['CompressedSize'] = self.__pretty_size(info['CompressedSize'])
 		return	info
 
 	def get_image_history(self, repo, tag):
@@ -336,13 +442,6 @@ class DockerRegistryV2:
 				data = data[n:].lstrip()
 			history += [data]
 		return	history
-
-	def get_image_size(self, repo, tag):
-		size = 0
-		manifest = self.get_manifest(repo, tag, 2)
-		for i in range(0, len(manifest['layers'])):
-			size += manifest['layers'][i]['size']
-		return	size
 
 def main():
 	parser = argparse.ArgumentParser(usage=usage, add_help=False)
@@ -381,14 +480,6 @@ def main():
 			print("ERROR: %s: %s" % ((args.image), error), file=sys.stderr)
 			sys.exit(1)
 
-		def pretty_size(size):
-			if size < 1024:
-				return str(size)
-			units = ('','K','M','G','T')
-			for n in (4,3,2,1):
-				if (size > 1024**n):
-					return "%.2f %cB" % ((float(size) / 1024**n), units[n])
-
 		if ':' in args.image:
 			repo, tag = args.image.rsplit(':', 1)
 		else:
@@ -414,13 +505,6 @@ def main():
 			if type(value) is list:
 				value = " ".join(value)
 			print('%-15s\t%s' % (key.replace('_', ''), value.replace('\t', ' ')))
-
-		# Print compressed image size
-		try:
-			size = reg.get_image_size(repo, tag)
-			print('%-15s\t%s' % ('CompressedSize', pretty_size(size)))
-		except  DockerRegistryError as error:
-			registry_error(error)
 
 		# Print image history
 		try:
