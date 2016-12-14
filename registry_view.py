@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.13.3 by Ricardo Branco
+# v1.13.4 by Ricardo Branco
 #
 # MIT License
 
@@ -40,7 +40,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.13.3"
+version = "1.13.4"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -161,8 +161,6 @@ class Curl:
 # Reference:
 # https://boto3.readthedocs.io/en/latest/reference/services/ecr.html
 class DockerRegistryECR:
-	__image_info = {}
-
 	def __init__(self, registry):
 		try:
 			import boto3
@@ -352,6 +350,8 @@ class DockerRegistryV2:
 		return s[:-4] + self.__tz + s[-5:]
 
 	def __pretty_size(self, size):
+		if not size:
+			return ""
 		if size < 1024:
 			return str(size)
 		units = ('','K','M','G','T')
@@ -432,7 +432,7 @@ class DockerRegistryV2:
 				size += manifest['layers'][i]['size']
 			info['CompressedSize'] = size
 		info['Digest'] = info['Digest'].replace('sha256:', '')
-		info['CompressedSize'] = self.__pretty_size(info['CompressedSize'])
+		info['CompressedSize'] = self.__pretty_size(info.get('CompressedSize'))
 		return	info
 
 	def get_image_history(self, repo, tag):
@@ -528,7 +528,7 @@ def main():
 		columns = int(subprocess.check_output(['/bin/stty', 'size']).split()[1])
 	cols = int(columns/3)
 
-	print("%-*s\t%-12s\t%-30s\t\t%s" % (cols, "Image", "Id", "Created on", "Docker version"))
+	print("%-*s\t%-12s\t%-30s\t%s\t%s" % (cols, "Image", "Id", "Created on", "Docker", "Compressed Size"))
 
 	for repo in reg.get_repositories():
 		try:
@@ -542,8 +542,8 @@ def main():
 			except	DockerRegistryError as error:
 				print("%-*s\tERROR: %s" % (cols, repo + ":" + tag, error))
 			else:
-				print("%-*s\t%-12s\t%s\t\t%s" % (cols, repo + ":" + tag,
-					info['Digest'][0:12], info['Created'], info['Docker_Version']))
+				print("%-*s\t%-12s\t%s\t%s\t%s" % (cols, repo + ":" + tag,
+					info['Digest'][0:12], info['Created'], info['Docker_Version'], info['CompressedSize']))
 
 if __name__ == "__main__":
 	try:
