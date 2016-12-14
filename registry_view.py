@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.13.2 by Ricardo Branco
+# v1.13.3 by Ricardo Branco
 #
 # MIT License
 
@@ -40,7 +40,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.13.2"
+version = "1.13.3"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -82,7 +82,9 @@ class Curl:
 		# Mimic Curl debug output
 		curl_prefix = { pycurl.INFOTYPE_TEXT: '* ', pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
 				pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: '' }
-
+		# Ignore SSL info types
+		if not curl_prefix.get(t):
+			return
 		m = m.decode('iso-8859-1').rstrip()
 		if t == pycurl.INFOTYPE_HEADER_OUT:
 			m = m.replace(r'\n', r'\n' + curl_prefix[t])
