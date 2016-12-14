@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.13.1 by Ricardo Branco
+# v1.13.2 by Ricardo Branco
 #
 # MIT License
 
@@ -27,7 +27,7 @@ except	ImportError:
 
 try:
 	from urllib.parse import urlencode
-except ImportError:
+except	ImportError:
 	from urllib import urlencode
 
 try:
@@ -40,7 +40,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.13.1"
+version = "1.13.2"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -214,7 +214,7 @@ class DockerRegistryECR:
 
 	def get_manifest(self, repo, tag):
 		data = self.__c.batch_get_image(registryId=self.__registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
-		return data['images'][0]['imageManifest']
+		return json.loads(data['images'][0]['imageManifest'])
 
 class DockerRegistryError(Exception): pass
 
@@ -357,7 +357,6 @@ class DockerRegistryV2:
 			if (size > 1024**n):
 				return "%.2f %cB" % ((float(size) / 1024**n), units[n])
 
-
 	# Get paginated results when the Registry is too large
 	def __get_paginated(self, s):
 		elements = []
@@ -373,27 +372,24 @@ class DockerRegistryV2:
 
 	def get_repositories(self):
 		if self.__aws_ecr:
-			return self.__aws_ecr.get_repositories()
-		data = self.__get("_catalog")
-		repositories = data['repositories'] + self.__get_paginated('repositories')
-		return repositories
+			repositories = self.__aws_ecr.get_repositories()
+		else:
+			data = self.__get("_catalog")
+			repositories = data['repositories'] + self.__get_paginated('repositories')
+		repositories.sort()
+		return	repositories
 
 	def get_tags(self, repo):
 		if self.__aws_ecr:
-			return self.__aws_ecr.get_tags(repo)
-		data = self.__get(repo + "/tags/list")
-		tags = data['tags'] + self.__get_paginated('tags')
+			tags = self.__aws_ecr.get_tags(repo)
+		else:
+			data = self.__get(repo + "/tags/list")
+			tags = data['tags'] + self.__get_paginated('tags')
 		tags.sort()
 		return tags
 
 	def get_manifest(self, repo, tag, version):
 		assert version in (1, 2)
-		headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)]
-		if self.__aws_ecr:
-			if version == 2:
-				return self.__aws_ecr.get_manifest(repo, tag)
-			else:
-				headers += ["Authorization: Basic " + self.__aws_ecr.get_auth()]
 		image = repo + ":" + tag
 		try:
 			manifest = self.__cached_manifest[image][version]
@@ -401,9 +397,13 @@ class DockerRegistryV2:
 				return manifest
 		except	KeyError:
 			self.__cached_manifest = { image: ['', '', ''] }
-		data = self.__get(repo + "/manifests/" + tag, headers=headers)
-		self.__cached_manifest[image][version] = data
-		return data
+		if self.__aws_ecr:
+			assert version == 1
+			self.__cached_manifest[image][version] = self.__aws_ecr.get_manifest(repo, tag)
+		else:
+			headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)]
+			self.__cached_manifest[image][version] = self.__get(repo + "/manifests/" + tag, headers=headers)
+		return	self.__cached_manifest[image][version]
 
 	def get_image_info(self, repo, tag):
 		info = {}
