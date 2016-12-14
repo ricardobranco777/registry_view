@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.13 by Ricardo Branco
+# v1.13.1 by Ricardo Branco
 #
 # MIT License
 
@@ -40,7 +40,7 @@ if sys.version_info[0] < 3:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.13"
+version = "1.13.1"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -222,6 +222,7 @@ class DockerRegistryV2:
 	__tz = time.strftime('%Z')
 	__cached_manifest = {}
 	__basic_auth = ""
+	__headers = []
 	__aws_ecr = None
 
 	def __init__(self, registry, **args):
@@ -274,7 +275,7 @@ class DockerRegistryV2:
 	def __get(self, url, headers=[]):
 		tries = 1
 		while True:
-			body = self.__c.get(self.__registry + "/v2/" + url, headers)
+			body = self.__c.get(self.__registry + "/v2/" + url, self.__headers + headers)
 			http_code = self.__c.get_http_code()
 			if http_code == 429:	# Too many requests
 				time.sleep(0.1)
@@ -290,6 +291,8 @@ class DockerRegistryV2:
 					print('ERROR: Unsupported authentication method: ' + auth_method, file=sys.stderr)
 					sys.exit(1)
 			else:
+				if not self.__headers and self.__basic_auth and tries == 1:
+					self.__headers = self.__auth_basic()
 				try:
 					data = json.loads(body)
 				except	ValueError:
