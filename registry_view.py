@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.13.4 by Ricardo Branco
+# v1.13.5 by Ricardo Branco
 #
 # MIT License
 
@@ -35,12 +35,14 @@ try:
 except	ImportError:
 	from StringIO import StringIO as BytesIO
 
-if sys.version_info[0] < 3:
+if sys.version_info[0] > 2:
+	import shutil
+else:
 	import subprocess
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.13.4"
+version = "1.13.5"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -171,37 +173,25 @@ class DockerRegistryECR:
 		m = re.search("^(?:https?://)?([0-9]{12})\.*", registry)
 		self.__registryId = m.group(1)
 
-	def __get_repositories(self, data):
-		repos = []
-		for i in range(len(data) - 1, -1, -1):
-			repos += [data[i]['repositoryName']]
-		return	repos
-
-	def __get_tags(self, data, repo):
-		tags = []
-		for i in range(len(data) - 1, -1, -1):
-			tags += data[i]['imageTags']
-		return	tags
-
 	def get_auth(self):
 		auth = self.__c.get_authorization_token(registryIds=[self.__registryId,])
 		return auth['authorizationData'][0]['authorizationToken']
 
 	def get_repositories(self):
-		paginator = self.__c.get_paginator('describe_repositories')
-		iterator = paginator.paginate(registryId=self.__registryId)
 		repositories = []
-		for response in iterator:
-			repositories += self.__get_repositories(response['repositories'])
+		paginator = self.__c.get_paginator('describe_repositories')
+		for response in paginator.paginate(registryId=self.__registryId):
+			for item in response['repositories']:
+				repositories += [item['repositoryName']]
 		return	repositories
 
 	def get_tags(self, repo):
 		tags = []
 		image_filter = {'tagStatus': 'TAGGED'}
 		paginator = self.__c.get_paginator('describe_images')
-		iterator = paginator.paginate(registryId=self.__registryId, repositoryName=repo, filter=image_filter)
-		for response in iterator:
-			tags += self.__get_tags(response['imageDetails'], repo)
+		for response in paginator.paginate(registryId=self.__registryId, repositoryName=repo, filter=image_filter):
+			for item in response['imageDetails']:
+				tags += item['imageTags']
 		return	tags
 
 	def get_info(self, repo, tag):
@@ -428,8 +418,8 @@ class DockerRegistryV2:
 				pass
 			# Calculate compressed size
 			size = 0
-			for i in range(0, len(manifest['layers'])):
-				size += manifest['layers'][i]['size']
+			for item in manifest['layers']:
+				size += item['size']
 			info['CompressedSize'] = size
 		info['Digest'] = info['Digest'].replace('sha256:', '')
 		info['CompressedSize'] = self.__pretty_size(info.get('CompressedSize'))
@@ -439,12 +429,11 @@ class DockerRegistryV2:
 		history = []
 		manifest = self.get_manifest(repo, tag, 1)
 		prefix = '/bin/sh -c #(nop)'
-		n = len(prefix)
-		for i in range(len(manifest['history']) - 1, -1, -1):
-			data = json.loads(manifest['history'][i]['v1Compatibility'])
+		for item in reversed(manifest['history']):
+			data = json.loads(item['v1Compatibility'])
 			data = " ".join(data['container_config']['Cmd'])
 			if data.startswith(prefix):
-				data = data[n:].lstrip()
+				data = data.replace(prefix, "").lstrip()
 			history += [data]
 		return	history
 
@@ -516,14 +505,14 @@ def main():
 			history = reg.get_image_history(repo, tag)
 		except	DockerRegistryError as error:
 			registry_error(error)
-		for i, layer in zip(range(1, len(history)), history):
-			print('%-15s\t%s' % ('History[' + str(i) + ']', layer.replace('\t', ' ')))
+		for i, layer in enumerate(history):
+			print('%-15s\t%s' % ('History[' + str(i+1) + ']', layer.replace('\t', ' ')))
 		sys.exit(0)
 
 	# Print information on all images
 
 	try:	# Python 3
-		columns = os.get_terminal_size().columns
+		columns = shutil.get_terminal_size(fallback=(158, 40)).columns
 	except:	# Unix only
 		columns = int(subprocess.check_output(['/bin/stty', 'size']).split()[1])
 	cols = int(columns/3)
