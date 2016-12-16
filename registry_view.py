@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.13.7 by Ricardo Branco
+# v1.13.8 by Ricardo Branco
 #
 # MIT License
 
@@ -42,7 +42,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.13.7"
+version = "1.13.8"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -163,6 +163,8 @@ class Curl:
 # Reference:
 # https://boto3.readthedocs.io/en/latest/reference/services/ecr.html
 class DockerRegistryECR:
+	__cached_info = { '': {} }
+
 	def __init__(self, registry):
 		try:
 			import boto3
@@ -186,13 +188,22 @@ class DockerRegistryECR:
 
 	def get_tags(self, repo):
 		tags = []
+		self.__cached_info = { repo: {} }
 		image_filter = {'tagStatus': 'TAGGED'}
 		paginator = self.__c.get_paginator('describe_images')
 		for response in paginator.paginate(registryId=self.__registryId, repositoryName=repo, filter=image_filter):
-			tags += [tag for item in response['imageDetails'] for tag in item['imageTags']]
+			for item in response['imageDetails']:
+				tags += item['imageTags']
+				for tag in item['imageTags']:
+					self.__cached_info[repo][tag] = { 'Digest': item['imageDigest'],
+									 'CompressedSize': item['imageSizeInBytes'] }
 		return	tags
 
 	def get_info(self, repo, tag):
+		try:
+			return self.__cached_info[repo][tag]
+		except	KeyError:
+			pass
 		info = {}
 		data = self.__c.describe_images(registryId=self.__registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
 		data = data['imageDetails'][0]
