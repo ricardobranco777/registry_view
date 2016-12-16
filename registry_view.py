@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.13.8 by Ricardo Branco
+# v1.13.9 by Ricardo Branco
 #
 # MIT License
 
@@ -42,7 +42,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.13.8"
+version = "1.13.9"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -130,7 +130,6 @@ class Curl:
 		self.buf.truncate()
 		self.c.setopt(pycurl.URL, url)
 		self.c.setopt(pycurl.POST, 1)
-		post_data = urlencode(post_data)
 		self.c.setopt(pycurl.POSTFIELDS, post_data)
 		if auth:
 			self.c.setopt(pycurl.HTTPHEADER, auth)
@@ -259,15 +258,13 @@ class DockerRegistryV2:
 	def __auth_token(self, response_header, use_post=True):
 		m = re.match('Bearer realm="([^"]+)".*', response_header)
 		url = m.group(1)
-		fields = {}
-		for field in ("service", "scope", "account"):
-			m = re.match('Bearer realm="(?:[^"]+)".*,' + field + '="([^"]+)"', response_header)
-			if m:
-				fields[field] = m.group(1)
+		fields = {k: v for k in ("service", "scope", "account")
+				for v in re.findall('Bearer realm="(?:[^"]+)".*,%s="([^"]+)"' % (k), response_header) if v}
+		fields = urlencode(fields)
 		if use_post:
 			token = json.loads(self.__c.post(url, fields, auth=self.__auth_basic()))['token']
 		else:
-			url += '?' + urlencode(fields)
+			url += '?' + fields
 			token = json.loads(self.__c.get(url, auth=self.__auth_basic()))['token']
 		return ['Authorization: Bearer ' + token]
 
