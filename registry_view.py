@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.13.5 by Ricardo Branco
+# v1.13.6 by Ricardo Branco
 #
 # MIT License
 
@@ -42,7 +42,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.13.5"
+version = "1.13.6"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -181,8 +181,7 @@ class DockerRegistryECR:
 		repositories = []
 		paginator = self.__c.get_paginator('describe_repositories')
 		for response in paginator.paginate(registryId=self.__registryId):
-			for item in response['repositories']:
-				repositories += [item['repositoryName']]
+			repositories += [item['repositoryName'] for item in response['repositories']]
 		return	repositories
 
 	def get_tags(self, repo):
@@ -190,8 +189,7 @@ class DockerRegistryECR:
 		image_filter = {'tagStatus': 'TAGGED'}
 		paginator = self.__c.get_paginator('describe_images')
 		for response in paginator.paginate(registryId=self.__registryId, repositoryName=repo, filter=image_filter):
-			for item in response['imageDetails']:
-				tags += item['imageTags']
+			tags += [tag for item in response['imageDetails'] for tag in item['imageTags']]
 		return	tags
 
 	def get_info(self, repo, tag):
@@ -401,11 +399,11 @@ class DockerRegistryV2:
 		info = {}
 		manifest = self.get_manifest(repo, tag, 1)
 		data = json.loads(manifest['history'][0]['v1Compatibility'])
-		for key in ('architecture', 'docker_version', 'os'):
-			info[key.title()] = data[key]
+		info.update({key.title(): data[key] for key in ('architecture', 'docker_version', 'os')})
 		info['Created'] = self.__parse_date(data['created'])
-		for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir'):
-			info[key] = data['config'].get(key)
+		info.update({key: data['config'][key]
+			for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir')
+				if data['config'].get(key)})
 		# Before Docker 1.9.0, ID's were not digests but random bytes
 		info['Digest'] = "-"
 		if self.__aws_ecr:
@@ -417,12 +415,10 @@ class DockerRegistryV2:
 			except	KeyError:
 				pass
 			# Calculate compressed size
-			size = 0
-			for item in manifest['layers']:
-				size += item['size']
-			info['CompressedSize'] = size
+			info['CompressedSize'] = sum((item['size'] for item in manifest['layers']))
 		info['Digest'] = info['Digest'].replace('sha256:', '')
-		info['CompressedSize'] = self.__pretty_size(info.get('CompressedSize'))
+		if info.get('CompressedSize'):
+			info['CompressedSize'] = self.__pretty_size(info.get('CompressedSize'))
 		return	info
 
 	def get_image_history(self, repo, tag):
