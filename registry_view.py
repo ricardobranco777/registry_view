@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.13.6 by Ricardo Branco
+# v1.13.7 by Ricardo Branco
 #
 # MIT License
 
@@ -42,7 +42,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.13.6"
+version = "1.13.7"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -417,8 +417,7 @@ class DockerRegistryV2:
 			# Calculate compressed size
 			info['CompressedSize'] = sum((item['size'] for item in manifest['layers']))
 		info['Digest'] = info['Digest'].replace('sha256:', '')
-		if info.get('CompressedSize'):
-			info['CompressedSize'] = self.__pretty_size(info.get('CompressedSize'))
+		info['CompressedSize'] = self.__pretty_size(info.get('CompressedSize'))
 		return	info
 
 	def get_image_history(self, repo, tag):
@@ -484,9 +483,7 @@ def main():
 		keys = list(info)
 		keys.sort()
 		for key in keys:
-			value = info.get(key)
-			if not value:
-				value = ""
+			value = info[key]
 			if type(value) is dict:
 				if key == "Labels":
 					value = str(json.dumps(value))
