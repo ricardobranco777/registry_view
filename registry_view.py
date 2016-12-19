@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.14 by Ricardo Branco
+# v1.14.1 by Ricardo Branco
 #
 # MIT License
 
@@ -42,7 +42,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.14"
+version = "1.14.1"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -108,7 +108,9 @@ class Curl:
 		value = value.strip()
 		self.headers[name] = value
 
-	def get(self, url, headers=[], auth=None):
+	def get(self, url, headers=None, auth=None):
+		if headers is None:
+			headers = []
 		self.headers = {}
 		self.buf.seek(0)
 		self.buf.truncate()
@@ -198,7 +200,7 @@ class DockerRegistryECR:
 									 'CompressedSize': item['imageSizeInBytes'] }
 		return	tags
 
-	def get_info(self, repo, tag):
+	def get_image_info(self, repo, tag):
 		try:
 			return self.__cached_info[repo][tag]
 		except	KeyError:
@@ -268,7 +270,9 @@ class DockerRegistryV2:
 			token = json.loads(self.__c.get(url, auth=self.__auth_basic()))['token']
 		return ['Authorization: Bearer ' + token]
 
-	def __get(self, url, headers=[]):
+	def __get(self, url, headers=None):
+		if headers is None:
+			headers = []
 		tries = 1
 		while True:
 			body = self.__c.get(self.__registry + "/v2/" + url, self.__headers + headers)
@@ -415,7 +419,7 @@ class DockerRegistryV2:
 		# Before Docker 1.9.0, ID's were not digests but random bytes
 		info['Digest'] = "-"
 		if self.__aws_ecr:
-			info.update(self.__aws_ecr.get_info(repo, tag))
+			info.update(self.__aws_ecr.get_image_info(repo, tag))
 		elif info['Docker_Version'] and int(info['Docker_Version'].replace('.', '')) >= 190:
 			manifest = self.get_manifest(repo, tag, 2)
 			try:
@@ -502,8 +506,8 @@ def main():
 			history = reg.get_image_history(repo, tag)
 		except	DockerRegistryError as error:
 			registry_error(error)
-		for i, layer in enumerate(history):
-			print('%-15s\t%s' % ('History[' + str(i+1) + ']', layer.replace('\t', ' ')))
+		for i, layer in enumerate(history, 1):
+			print('%-15s\t%s' % ('History[' + str(i) + ']', layer.replace('\t', ' ')))
 		sys.exit(0)
 
 	# Print information on all images
