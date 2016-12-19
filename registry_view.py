@@ -57,7 +57,10 @@ Note: Default PORT is 443. You must prepend "http://" to REGISTRY if running on 
 """
 
 class Curl:
+	"""This class encapsulates PyCurl operations"""
+
 	def __init__(self, **opts):
+		"""Initializes a pycurl handle"""
 		self.c = pycurl.Curl()
 		curlopts = [('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('verbose', pycurl.VERBOSE)]
 		if hasattr(pycurl, 'KEYPASSWD'):
@@ -77,11 +80,12 @@ class Curl:
 		self.c.setopt(pycurl.WRITEDATA, self.buf)
 
 	def __del__(self):
+		"""Closes the pycurl handle"""
 		self.buf.close()
 		self.c.close()
 
 	def __debug_function(self, t, m):
-		# Mimic Curl debug output
+		"""Debug function used to mimic curl's debug output"""
 		curl_prefix = { pycurl.INFOTYPE_TEXT: '* ', pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
 				pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: '' }
 		# Ignore SSL info types
@@ -94,6 +98,7 @@ class Curl:
 
 	# Adapted from https://github.com/pycurl/pycurl/blob/master/examples/quickstart/response_headers.py
 	def __header_function(self, header_line):
+		"""Gets the HTTP headers from a response"""
 		# HTTP standard specifies that headers are encoded in iso-8859-1
 		header_line = header_line.decode('iso-8859-1')
 		# Header lines include the first status line (HTTP/1.x ...)
@@ -109,6 +114,8 @@ class Curl:
 		self.headers[name] = value
 
 	def get(self, url, headers=None, auth=None):
+		"""Makes the HTTP GET request with optional headers.
+		The auth parameter must begin with 'Authorization: '"""
 		if headers is None:
 			headers = []
 		self.headers = {}
@@ -128,6 +135,8 @@ class Curl:
 		return body.decode(self.get_charset())
 
 	def post(self, url, post_data, auth=None):
+		"""Makes the HTTP POST request.
+		The auth parameter must begin with 'Authorization: '"""
 		self.buf.seek(0)
 		self.buf.truncate()
 		self.c.setopt(pycurl.URL, url)
@@ -143,13 +152,12 @@ class Curl:
 		body = self.buf.getvalue()
 		return body.decode(self.get_charset())
 
-	def get_headers(self, key=None):
-		if key:
-			return self.headers.get(key)
-		else:
-			return self.headers
+	def get_headers(self, key):
+		"""Get a specific header line"""
+		return self.headers.get(key)
 
 	def get_charset(self):
+		"""Get the charset from the 'Content-Type' header line"""
 		try:
 			match = re.search('charset=(\S+)', self.headers['content-type'])
 			if match:
@@ -159,14 +167,18 @@ class Curl:
 		return 'iso-8859-1'
 
 	def get_http_code(self):
+		"""Get the HTTP response code for the last operation"""
 		return self.c.getinfo(pycurl.HTTP_CODE)
 
 # Reference:
 # https://boto3.readthedocs.io/en/latest/reference/services/ecr.html
 class DockerRegistryECR:
+	"""This class encapsulates Boto3 operations to get information from an EC2 Container Registry"""
+
 	__cached_info = { '': {} }
 
 	def __init__(self, registry):
+		"""Gets the boto3 handle"""
 		try:
 			import boto3
 		except	ImportError:
@@ -176,11 +188,8 @@ class DockerRegistryECR:
 		m = re.search("^(?:https?://)?([0-9]{12})\.*", registry)
 		self.__registryId = m.group(1)
 
-	def get_auth(self):
-		auth = self.__c.get_authorization_token(registryIds=[self.__registryId,])
-		return auth['authorizationData'][0]['authorizationToken']
-
 	def get_repositories(self):
+		"""Returns a list of repositories"""
 		repositories = []
 		paginator = self.__c.get_paginator('describe_repositories')
 		for response in paginator.paginate(registryId=self.__registryId):
@@ -188,6 +197,7 @@ class DockerRegistryECR:
 		return	repositories
 
 	def get_tags(self, repo):
+		"""Returns a list of tags for the specified repository"""
 		tags = []
 		self.__cached_info = { repo: {} }
 		image_filter = {'tagStatus': 'TAGGED'}
@@ -201,6 +211,7 @@ class DockerRegistryECR:
 		return	tags
 
 	def get_image_info(self, repo, tag):
+		"""Returns a dictionary with image info such as Digest and CompressedSize"""
 		try:
 			return self.__cached_info[repo][tag]
 		except	KeyError:
@@ -213,12 +224,17 @@ class DockerRegistryECR:
 		return info
 
 	def get_manifest(self, repo, tag):
+		"""Returns the image manifest as a dictionary"""
 		data = self.__c.batch_get_image(registryId=self.__registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
 		return json.loads(data['images'][0]['imageManifest'])
 
-class DockerRegistryError(Exception): pass
+class DockerRegistryError(Exception):
+	"""This class is used to raise Docker Registry errors"""
+	pass
 
 class DockerRegistryV2:
+	"""This class encapsulates operations to get information from a Docker Registry v2"""
+
 	__tz = time.strftime('%Z')
 	__cached_manifest = {}
 	__basic_auth = ""
@@ -226,6 +242,7 @@ class DockerRegistryV2:
 	__aws_ecr = None
 
 	def __init__(self, registry, **args):
+		"""Get a Curl handle and checks the type and availability of the Registry"""
 		self.__c = Curl(**args)
 		self.__registry = registry
 		# Assume https:// by default
@@ -252,12 +269,15 @@ class DockerRegistryV2:
 		self.__check_registry()
 
 	def __auth_basic(self):
+		"""Returns the 'Authorization' header for HTTP Basic Authentication"""
 		if not self.__basic_auth:
 			userpass = input('Username: ') + ":" + getpass('Password: ')
 			self.__basic_auth = str(base64.b64encode(userpass.encode()).decode('ascii'))
 		return ['Authorization: Basic ' + self.__basic_auth]
 
+	# Reference: https://docs.docker.com/registry/spec/auth/
 	def __auth_token(self, response_header, use_post=True):
+		"""Returns the token from the response_header"""
 		m = re.match('Bearer realm="([^"]+)".*', response_header)
 		url = m.group(1)
 		fields = {k: v for k in ("service", "scope", "account")
@@ -271,6 +291,7 @@ class DockerRegistryV2:
 		return ['Authorization: Bearer ' + token]
 
 	def __get(self, url, headers=None):
+		"""Gets the specified url within the Docker Registry with optional headers"""
 		if headers is None:
 			headers = []
 		tries = 1
@@ -304,6 +325,7 @@ class DockerRegistryV2:
 			tries -= 1
 
 	def __check_registry(self):
+		"""Checks for a valid Docker Registry"""
 		body = self.__get("")
 		if body == {} or body == "":
 			return
@@ -318,6 +340,7 @@ class DockerRegistryV2:
 		sys.exit(1)
 
 	def __get_creds(self):
+		"""Gets the credentials from ~/.docker/config.json"""
 		if not os.path.exists(os.path.expanduser("~/.docker/config.json")):
 			return
 		auth = ""
@@ -344,12 +367,13 @@ class DockerRegistryV2:
 		f.close()
 		return auth
 
-	# Convert date/time string in ISO-6801 format to date(1)
 	def __parse_date(self, ts):
+		"""Converts date/time string in ISO-6801 format to date(1)"""
 		s = datetime.fromtimestamp(timegm(time.strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))).ctime()
 		return s[:-4] + self.__tz + s[-5:]
 
 	def __pretty_size(self, size):
+		"""Converts a size in bytes to a string in KB, MB, GB or TB"""
 		if not size:
 			return ""
 		if size < 1024:
@@ -359,8 +383,8 @@ class DockerRegistryV2:
 			if (size > 1024**n):
 				return "%.2f %cB" % ((float(size) / 1024**n), units[n])
 
-	# Get paginated results when the Registry is too large
 	def __get_paginated(self, s):
+		"""Get paginated results when the Registry is too large"""
 		elements = []
 		while True:
 			url = self.__c.get_headers('link')
@@ -373,6 +397,7 @@ class DockerRegistryV2:
 		return	elements
 
 	def get_repositories(self):
+		"""Returns a list of repositories"""
 		if self.__aws_ecr:
 			repositories = self.__aws_ecr.get_repositories()
 		else:
@@ -382,6 +407,7 @@ class DockerRegistryV2:
 		return	repositories
 
 	def get_tags(self, repo):
+		"""Returns a list of tags for the specified repository"""
 		if self.__aws_ecr:
 			tags = self.__aws_ecr.get_tags(repo)
 		else:
@@ -391,6 +417,7 @@ class DockerRegistryV2:
 		return tags
 
 	def get_manifest(self, repo, tag, version):
+		"""Returns the image manifest as a dictionary. The schema versions must be 1 or 2"""
 		assert version in (1, 2)
 		image = repo + ":" + tag
 		try:
@@ -408,6 +435,7 @@ class DockerRegistryV2:
 		return	self.__cached_manifest[image][version]
 
 	def get_image_info(self, repo, tag):
+		"""Returns a dictionary with image info containing the most interesting items"""
 		info = {}
 		manifest = self.get_manifest(repo, tag, 1)
 		data = json.loads(manifest['history'][0]['v1Compatibility'])
@@ -433,6 +461,7 @@ class DockerRegistryV2:
 		return	info
 
 	def get_image_history(self, repo, tag):
+		"""Returns a list containing the image history (layers)"""
 		history = []
 		manifest = self.get_manifest(repo, tag, 1)
 		prefix = '/bin/sh -c #(nop)'
