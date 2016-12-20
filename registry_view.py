@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.14.2 by Ricardo Branco
+# v1.14.3 by Ricardo Branco
 #
 # MIT License
 
@@ -43,7 +43,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.14.2"
+version = "1.14.3"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -442,7 +442,7 @@ class DockerRegistryV2:
 		info.update({key.title(): data[key] for key in ('architecture', 'docker_version', 'os')})
 		info['Created'] = self._pretty_date(data['created'])
 		info.update({key: data['config'][key]
-			for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir')
+			for key in ('Entrypoint', 'Env', 'ExposedPorts', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir')
 				if data['config'].get(key)})
 		# Before Docker 1.9.0, ID's were not digests but random bytes
 		info['Digest'] = "-"
