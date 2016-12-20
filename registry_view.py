@@ -7,16 +7,17 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.14.1 by Ricardo Branco
+# v1.14.2 by Ricardo Branco
 #
 # MIT License
 
 from __future__ import print_function
 
-import argparse, base64, json, os, re, string, sys, time
+import argparse, base64, json, os, re, string, sys
 
 from calendar import timegm
 from datetime import datetime
+from time import localtime, sleep, strptime, strftime
 from getpass import getpass
 
 try:
@@ -42,7 +43,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.14.1"
+version = "1.14.2"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -235,7 +236,6 @@ class DockerRegistryError(Exception):
 class DockerRegistryV2:
 	"""This class encapsulates operations to get information from a Docker Registry v2"""
 
-	_tz = time.strftime('%Z')
 	_cached_manifest = {}
 	_basic_auth = ""
 	_headers = []
@@ -299,7 +299,7 @@ class DockerRegistryV2:
 			body = self._c.get(self._registry + "/v2/" + url, self._headers + headers)
 			http_code = self._c.get_http_code()
 			if http_code == 429:	# Too many requests
-				time.sleep(0.1)
+				sleep(0.1)
 				continue
 			elif http_code == 401 and tries > 0:
 				headers = headers[:]
@@ -367,10 +367,10 @@ class DockerRegistryV2:
 		f.close()
 		return auth
 
-	def _parse_date(self, ts):
-		"""Converts date/time string in ISO-6801 format to date(1)"""
-		s = datetime.fromtimestamp(timegm(time.strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))).ctime()
-		return s[:-4] + self._tz + s[-5:]
+	def _pretty_date(self, ts):
+		"""Converts date/time string in ISO-8601 format to date(1)"""
+		return strftime("%a %b %d %H:%M:%S %Z %Y",
+			localtime(timegm(strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))))
 
 	def _pretty_size(self, size):
 		"""Converts a size in bytes to a string in KB, MB, GB or TB"""
@@ -440,7 +440,7 @@ class DockerRegistryV2:
 		manifest = self.get_manifest(repo, tag, 1)
 		data = json.loads(manifest['history'][0]['v1Compatibility'])
 		info.update({key.title(): data[key] for key in ('architecture', 'docker_version', 'os')})
-		info['Created'] = self._parse_date(data['created'])
+		info['Created'] = self._pretty_date(data['created'])
 		info.update({key: data['config'][key]
 			for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir')
 				if data['config'].get(key)})
