@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.14.2 by Ricardo Branco
+# v1.14.3 by Ricardo Branco
 #
 # MIT License
 
@@ -43,7 +43,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.14.2"
+version = "1.14.3"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -465,7 +465,7 @@ class DockerRegistryV2:
 		history = []
 		manifest = self.get_manifest(repo, tag, 1)
 		prefix = '/bin/sh -c #(nop)'
-		history = [" ".join(json.loads(item['v1Compatibility'])['container_config']['Cmd']).replace(prefix, "").lstrip()
+		history = [" ".join(json.loads(item['v1Compatibility'])['container_config']['Cmd']).replace(prefix, "").replace("/bin/sh -c", "RUN").lstrip()
 				for item in reversed(manifest['history'])]
 		return	history
 
@@ -528,7 +528,7 @@ def main():
 					value = list(value)
 			if type(value) is list:
 				value = " ".join(value)
-			print('%-15s\t%s' % (key.replace('_', ''), value.replace('\t', ' ')))
+			print('%-15s\t%s' % (key.replace('_', ''), value))
 
 		# Print image history
 		try:
