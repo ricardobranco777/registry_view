@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.14.5 by Ricardo Branco
+# v1.14.6 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.14.5"
+version = "1.14.6"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -82,7 +82,7 @@ class Curl:
 		self.c.setopt(pycurl.HEADERFUNCTION, self._header_function)
 		self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
 		self.buf = BytesIO()
-		self.c.setopt(pycurl.WRITEDATA, self.buf)
+		self.c.setopt(pycurl.WRITEFUNCTION, self.buf.write)
 
 	def __del__(self):
 		"""Closes the pycurl handle"""
