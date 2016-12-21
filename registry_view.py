@@ -536,7 +536,7 @@ def main():
 		except	DockerRegistryError as error:
 			registry_error(error)
 		for i, layer in enumerate(history, 1):
-			print('%-15s\t%s' % ('History[' + str(i) + ']', layer.replace('\t', ' ')))
+			print('%-15s\t%s' % ('History[' + str(i) + ']', layer))
 		sys.exit(0)
 
 	# Print information on all images
