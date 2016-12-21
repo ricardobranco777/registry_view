@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.14.6 by Ricardo Branco
+# v1.14.7 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.14.6"
+version = "1.14.7"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -121,7 +121,7 @@ class Curl:
 	def get(self, url, headers=None, auth=None):
 		"""Makes the HTTP GET request with optional headers.
 		The auth parameter must begin with 'Authorization: '"""
-		if headers is None:
+		if not headers:
 			headers = []
 		self.headers = {}
 		self.buf.seek(0)
@@ -286,7 +286,7 @@ class DockerRegistryV2:
 
 	def _get(self, url, headers=None):
 		"""Gets the specified url within the Docker Registry with optional headers"""
-		if headers is None:
+		if not headers:
 			headers = []
 		tries = 1
 		while True:
@@ -511,6 +511,10 @@ def main():
 			registry_error(error)
 
 		# Print image info
+
+		# Convert 'PATH=xxx foo=bar' into 'PATH="xxx" foo="bar"'
+		info["Env"] = [re.sub('([^=]+)=(.*)', r'\1="\2"', env.replace('"', r'\"')) for env in info["Env"]]
+
 		keys = list(info)
 		keys.sort()
 		for key in keys:
@@ -521,7 +525,10 @@ def main():
 				else:
 					value = list(value)
 			if type(value) is list:
-				value = " ".join(value)
+				if key in ('Env', 'ExposedPorts'):
+					value = " ".join(sorted(value))
+				else:
+					value = "[ '" + "".join("', '".join(item for item in value)) + "' ]"
 			if not PY3:
 				value = value.encode('utf-8')
 			print('%-15s\t%s' % (key.replace('_', ''), value))
