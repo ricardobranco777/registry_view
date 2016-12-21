@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.14.4 by Ricardo Branco
+# v1.14.5 by Ricardo Branco
 #
 # MIT License
 
@@ -36,14 +36,16 @@ try:
 except	ImportError:
 	from StringIO import StringIO as BytesIO
 
-if sys.version_info[0] > 2:
+PY3 = sys.version_info[0] == 3
+
+if PY3:
 	import shutil
 else:
 	import subprocess
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.14.4"
+version = "1.14.5"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -56,6 +58,8 @@ Options:
 
 Note: Default PORT is 443. You must prepend "http://" to REGISTRY if running on plain HTTP.
 """
+
+os.environ['LC_ALL'] = 'C.UTF-8'
 
 class Curl:
 	"""This class encapsulates PyCurl operations"""
@@ -518,6 +522,8 @@ def main():
 					value = list(value)
 			if type(value) is list:
 				value = " ".join(value)
+			if not PY3:
+				value = value.encode('utf-8')
 			print('%-15s\t%s' % (key.replace('_', ''), value))
 
 		# Print image history
@@ -526,6 +532,8 @@ def main():
 		except	DockerRegistryError as error:
 			registry_error(error)
 		for i, layer in enumerate(history, 1):
+			if not PY3:
+				layer = layer.encode('utf-8')
 			print('%-15s\t%s' % ('History[' + str(i) + ']', layer))
 		sys.exit(0)
 
