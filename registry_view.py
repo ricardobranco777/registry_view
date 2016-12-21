@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.14.3 by Ricardo Branco
+# v1.14.4 by Ricardo Branco
 #
 # MIT License
 
@@ -43,7 +43,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.14.3"
+version = "1.14.4"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -133,7 +133,7 @@ class Curl:
 			print(self.c.errstr(), file=sys.stderr)
 			sys.exit(err.args[0])
 		body = self.buf.getvalue()
-		return body.decode(self.get_charset())
+		return body.decode('utf-8')
 
 	def post(self, url, post_data, auth=None):
 		"""Makes the HTTP POST request.
@@ -151,21 +151,11 @@ class Curl:
 			print(self.c.errstr(), file=sys.stderr)
 			sys.exit(err.args[0])
 		body = self.buf.getvalue()
-		return body.decode(self.get_charset())
+		return body.decode('utf-8')
 
 	def get_headers(self, key):
 		"""Get a specific header line"""
 		return self.headers.get(key)
-
-	def get_charset(self):
-		"""Get the charset from the 'Content-Type' header line"""
-		try:
-			match = re.search('charset=(\S+)', self.headers['content-type'])
-			if match:
-				return match.group(1)
-		except	KeyError:
-			pass
-		return 'iso-8859-1'
 
 	def get_http_code(self):
 		"""Get the HTTP response code for the last operation"""
