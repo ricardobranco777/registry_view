@@ -82,7 +82,10 @@ class Curl:
 		self.c.setopt(pycurl.HEADERFUNCTION, self._header_function)
 		self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
 		self.buf = BytesIO()
-		self.c.setopt(pycurl.WRITEFUNCTION, self.buf.write)
+		try:
+			self.c.setopt(pycurl.WRITE, self.buf)
+		except	AttributeError:
+			self.c.setopt(pycurl.WRITEFUNCTION, self.buf.write)
 
 	def __del__(self):
 		"""Closes the pycurl handle"""
