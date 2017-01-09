@@ -5,11 +5,13 @@ Additional support for AWS EC2 Container Registry with Boto3 (pip install boto3)
 See https://github.com/boto/boto3 for configuration details
 
 Usage: registry_view.py [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
+
 Options:
+
 	-c, --cert CERT		Client certificate file name
 	-k, --key  KEY		Client private key file name
 	-p, --pass PASS		Pass phrase for the private key
 	-u, --user USER[:PASS]	Server user and password (for HTTP Basic authentication)
-        -v, --verbose		Be verbose. May be specified multiple times
+	-v, --verbose		Be verbose. May be specified multiple times
 
 Note: Default port is 443. You must specify "http://..." if running on plain HTTP.
