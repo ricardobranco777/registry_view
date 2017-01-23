@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.14.8 by Ricardo Branco
+# v1.14.9 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.14.8"
+version = "1.14.9"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -275,10 +275,9 @@ class DockerRegistryV2:
 	# Reference: https://docs.docker.com/registry/spec/auth/
 	def _auth_token(self, response_header, use_post=True):
 		"""Returns the token from the response_header"""
-		m = re.match('Bearer realm="([^"]+)".*', response_header)
-		url = m.group(1)
-		fields = {k: v for k in ("service", "scope", "account")
-				for v in re.findall('Bearer realm="(?:[^"]+)".*,%s="([^"]+)"' % (k), response_header) if v}
+		fields = {k: v for (k, v) in re.findall(',?([^=]+)="([^"]+)"', response_header)}
+		url = fields['Bearer realm']
+		del(fields['Bearer realm'])
 		fields = urlencode(fields)
 		if use_post:
 			token = json.loads(self._c.post(url, fields, auth=self._auth_basic()))['token']
