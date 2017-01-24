@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.14.9 by Ricardo Branco
+# v1.15 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.14.9"
+version = "1.15"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -73,10 +73,10 @@ class Curl:
 		else:
 			curlopts += [('pass', pycurl.SSLCERTPASSWD)]
 		for opt, curlopt in curlopts:
-			if opts[opt]:
+			if opts[opt] is not None:
 				self.c.setopt(curlopt, opts[opt])
 		self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
-		if opts['verbose']:
+		if opts['verbose'] is not None:
 			if opts['verbose'] > 1:
 				self.c.setopt(pycurl.DEBUGFUNCTION, self._debug_function)
 		self.c.setopt(pycurl.HEADERFUNCTION, self._header_function)
@@ -97,7 +97,7 @@ class Curl:
 		curl_prefix = { pycurl.INFOTYPE_TEXT: '* ', pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
 				pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: '' }
 		# Ignore SSL info types
-		if not curl_prefix.get(t):
+		if curl_prefix.get(t) is None:
 			return
 		m = m.decode('iso-8859-1').rstrip()
 		if t == pycurl.INFOTYPE_HEADER_OUT:
@@ -111,7 +111,7 @@ class Curl:
 		header_line = header_line.decode('iso-8859-1')
 		# Header lines include the first status line (HTTP/1.x ...)
 		if ':' not in header_line:
-			if not self.headers.get('HTTP_STATUS'):
+			if self.headers.get('HTTP_STATUS') is None:
 				self.headers['HTTP_STATUS'] = header_line.strip()
 			return
 		# Break the header line into header name and value.
@@ -124,7 +124,7 @@ class Curl:
 	def get(self, url, headers=None, auth=None):
 		"""Makes the HTTP GET request with optional headers.
 		The auth parameter must begin with 'Authorization: '"""
-		if not headers:
+		if headers is None:
 			headers = []
 		self.headers = {}
 		self.buf.seek(0)
@@ -132,7 +132,7 @@ class Curl:
 		self.c.setopt(pycurl.URL, url)
 		self.c.setopt(pycurl.HTTPGET, 1)
 		self.c.setopt(pycurl.HTTPHEADER, headers)
-		if auth:
+		if auth is not None:
 			self.c.setopt(pycurl.HTTPHEADER, auth)
 		try:
 			self.c.perform()
@@ -150,7 +150,7 @@ class Curl:
 		self.c.setopt(pycurl.URL, url)
 		self.c.setopt(pycurl.POST, 1)
 		self.c.setopt(pycurl.POSTFIELDS, post_data)
-		if auth:
+		if auth is not None:
 			self.c.setopt(pycurl.HTTPHEADER, auth)
 		try:
 			self.c.perform()
@@ -243,22 +243,22 @@ class DockerRegistryV2:
 		self._c = Curl(**args)
 		self._registry = registry
 		# Assume https:// by default
-		if not re.match("https?://", self._registry):
+		if re.match("https?://", self._registry) is None:
 			self._registry = "https://" + self._registry
 		# Check for AWS EC2 Container Registry
-		if re.match("(?:https?://)?[0-9]{12}\.dkr\.ecr\.[a-z0-9]+[a-z0-9-]*\.amazonaws\.com(?::\d+)?$", self._registry):
+		if re.match("(?:https?://)?[0-9]{12}\.dkr\.ecr\.[a-z0-9]+[a-z0-9-]*\.amazonaws\.com(?::\d+)?$", self._registry) is not None:
 			try:
 				self._aws_ecr = DockerRegistryECR(self._registry)
 				return
 			except	ImportError:
-				if not args['user']:
+				if args['user'] is None:
 					print('ERROR: Use the -u option with the credentials obtained from "aws ecr get-login"', file=sys.stderr)
 					sys.exit(1)
 		# Set credentials if specified or set in ~/.docker/config.json
-		if args['user']:
+		if args['user'] is not None:
 			if not ':' in args['user']:
 				args['user'] += ":" + getpass("Password: ")
-		if args['user']:
+		if args['user'] is not None:
 			self._basic_auth = str(base64.b64encode(args['user'].encode()).decode('ascii'))
 		else:
 			self._basic_auth = self._get_creds()
@@ -288,7 +288,7 @@ class DockerRegistryV2:
 
 	def _get(self, url, headers=None):
 		"""Gets the specified url within the Docker Registry with optional headers"""
-		if not headers:
+		if headers is None:
 			headers = []
 		tries = 1
 		while True:
@@ -300,7 +300,7 @@ class DockerRegistryV2:
 			elif http_code == 401 and tries > 0:
 				headers = headers[:]
 				auth_method = self._c.get_headers('www-authenticate')
-				if not auth_method or auth_method.startswith('Basic '):
+				if auth_method is None or auth_method.startswith('Basic '):
 					headers += self._auth_basic()
 				elif auth_method.startswith('Bearer '):
 					headers += self._auth_token(auth_method)
@@ -314,7 +314,7 @@ class DockerRegistryV2:
 					data = json.loads(body)
 				except	ValueError:
 					return body
-				if data.get('errors'):
+				if data.get('errors') is not None:
 					raise DockerRegistryError(data['errors'][0]['message'])
 				else:
 					return data
@@ -330,7 +330,7 @@ class DockerRegistryV2:
 			error = 'Invalid v2 Docker Registry: ' + self._registry
 		else:
 			error = self._c.get_headers('HTTP_STATUS')
-			if not error:
+			if error is not None and not error:
 				error = "Invalid HTTP server"
 		print('ERROR: ' + error, file=sys.stderr)
 		sys.exit(1)
@@ -343,7 +343,7 @@ class DockerRegistryV2:
 		f = open(os.path.expanduser("~/.docker/config.json"), "r")
 		config = json.load(f)
 		try_registry = [re.sub("^https?://", "", self._registry)]
-		if not re.search(':\d+$', try_registry[0]):
+		if re.search(':\d+$', try_registry[0]) is None:
 			if self._registry.startswith('https://'):
 				try_registry += [try_registry[0] + ':443']
 			elif self._registry.startswith('http://'):
@@ -384,7 +384,7 @@ class DockerRegistryV2:
 		elements = []
 		while True:
 			url = self._c.get_headers('link')
-			if not url:
+			if url is None:
 				break
 			m = re.match('</v2/(.*)>; rel="next"', url)
 			url = m.group(1)
@@ -394,7 +394,7 @@ class DockerRegistryV2:
 
 	def get_repositories(self):
 		"""Returns a list of repositories"""
-		if self._aws_ecr:
+		if self._aws_ecr is not None:
 			repositories = self._aws_ecr.get_repositories()
 		else:
 			data = self._get("_catalog")
@@ -404,7 +404,7 @@ class DockerRegistryV2:
 
 	def get_tags(self, repo):
 		"""Returns a list of tags for the specified repository"""
-		if self._aws_ecr:
+		if self._aws_ecr is not None:
 			tags = self._aws_ecr.get_tags(repo)
 		else:
 			data = self._get(repo + "/tags/list")
@@ -422,7 +422,7 @@ class DockerRegistryV2:
 				return manifest
 		except	KeyError:
 			self._cached_manifest = { image: ['', '', ''] }
-		if self._aws_ecr:
+		if self._aws_ecr is not None:
 			assert version == 1
 			self._cached_manifest[image][version] = self._aws_ecr.get_manifest(repo, tag)
 		else:
@@ -439,10 +439,10 @@ class DockerRegistryV2:
 		info['Created'] = self._pretty_date(data['created'])
 		info.update({key: data['config'][key]
 			for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir')
-				if data['config'].get(key)})
+				if data['config'].get(key) is not None})
 		# Before Docker 1.9.0, ID's were not digests but random bytes
 		info['Digest'] = "-"
-		if self._aws_ecr:
+		if self._aws_ecr is not None:
 			info.update(self._aws_ecr.get_image_info(repo, tag))
 		elif info['Docker_Version'] and int(info['Docker_Version'].replace('.', '')) >= 190:
 			manifest = self.get_manifest(repo, tag, 2)
