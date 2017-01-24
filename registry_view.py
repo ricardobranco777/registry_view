@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.15 by Ricardo Branco
+# v1.15.1 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.15"
+version = "1.15.1"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -337,7 +337,12 @@ class DockerRegistryV2:
 
 	def _get_creds(self):
 		"""Gets the credentials from ~/.docker/config.json"""
-		if not os.path.exists(os.path.expanduser("~/.docker/config.json")):
+		config_file = ""
+		if os.getenv("DOCKER_CONFIG") is not None:
+			config_file = os.path.join(os.getenv("DOCKER_CONFIG"), "config.json")
+		else:
+			config_file = os.path.expanduser(os.path.join("~", ".docker", "config.json"))
+		if not os.path.exists(config_file):
 			return
 		auth = ""
 		f = open(os.path.expanduser("~/.docker/config.json"), "r")
