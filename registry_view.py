@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.15.1 by Ricardo Branco
+# v1.15.2 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
 	input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.15.1"
+version = "1.15.2"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -180,9 +180,13 @@ class DockerRegistryECR:
 		try:
 			import boto3
 		except	ImportError:
-			print("WARNING: Install the latest Python boto3 library to AWS ECR. Use: pip install boto3", file=sys.stderr)
-			raise ImportError
-		self._c = boto3.client('ecr')
+			print("ERROR: Install the boto3 Python library to get data from AWS ECR", file=sys.stderr)
+			sys.exit(1)
+		try:
+			self._c = boto3.client('ecr')
+		except	NoCredentialsError:
+			print("ERROR: Unable to locate credentials", file=sys.stderr)
+			sys.exit(1)
 		m = re.search("^(?:https?://)?([0-9]{12})\.*", registry)
 		self._registryId = m.group(1)
 
@@ -243,17 +247,12 @@ class DockerRegistryV2:
 		self._c = Curl(**args)
 		self._registry = registry
 		# Assume https:// by default
-		if re.match("https?://", self._registry) is None:
+		if re.match("https?://", self._registry):
 			self._registry = "https://" + self._registry
 		# Check for AWS EC2 Container Registry
-		if re.match("(?:https?://)?[0-9]{12}\.dkr\.ecr\.[a-z0-9]+[a-z0-9-]*\.amazonaws\.com(?::\d+)?$", self._registry) is not None:
-			try:
-				self._aws_ecr = DockerRegistryECR(self._registry)
-				return
-			except	ImportError:
-				if args['user'] is None:
-					print('ERROR: Use the -u option with the credentials obtained from "aws ecr get-login"', file=sys.stderr)
-					sys.exit(1)
+		if re.match("(?:https?://)?[0-9]{12}\.dkr\.ecr\.[a-z0-9]+[a-z0-9-]*\.amazonaws\.com(?::\d+)?$", self._registry):
+			self._aws_ecr = DockerRegistryECR(self._registry)
+			return
 		# Set credentials if specified or set in ~/.docker/config.json
 		if args['user'] is not None:
 			if not ':' in args['user']:
@@ -348,7 +347,7 @@ class DockerRegistryV2:
 		f = open(os.path.expanduser("~/.docker/config.json"), "r")
 		config = json.load(f)
 		try_registry = [re.sub("^https?://", "", self._registry)]
-		if re.search(':\d+$', try_registry[0]) is None:
+		if re.search(':\d+$', try_registry[0]):
 			if self._registry.startswith('https://'):
 				try_registry += [try_registry[0] + ':443']
 			elif self._registry.startswith('http://'):
@@ -442,9 +441,8 @@ class DockerRegistryV2:
 		data = json.loads(manifest['history'][0]['v1Compatibility'])
 		info.update({key.title(): data[key] for key in ('architecture', 'docker_version', 'os')})
 		info['Created'] = self._pretty_date(data['created'])
-		info.update({key: data['config'][key]
-			for key in ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir')
-				if data['config'].get(key) is not None})
+		keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir')
+		info.update({key: data['config'][key] for key in keys if data['config'].get(key) is not None})
 		# Before Docker 1.9.0, ID's were not digests but random bytes
 		info['Digest'] = "-"
 		if self._aws_ecr is not None:
