@@ -110,7 +110,7 @@ class Curl:
 		# HTTP standard specifies that headers are encoded in iso-8859-1
 		header_line = header_line.decode('iso-8859-1')
 		# Header lines include the first status line (HTTP/1.x ...)
-		if ':' not in header_line:
+		if not ':' in header_line:
 			if self.headers.get('HTTP_STATUS') is None:
 				self.headers['HTTP_STATUS'] = header_line.strip()
 			return
@@ -464,8 +464,9 @@ class DockerRegistryV2:
 		history = []
 		manifest = self.get_manifest(repo, tag, 1)
 		prefix = '/bin/sh -c #(nop)'
-		history = [" ".join(json.loads(item['v1Compatibility'])['container_config']['Cmd']).replace(prefix, "").replace("/bin/sh -c", "RUN").lstrip()
-				for item in reversed(manifest['history'])]
+		for item in reversed(manifest['history']):
+			data = json.loads(item['v1Compatibility'])['container_config']['Cmd']
+			history += [" ".join(data).replace(prefix, "").replace("/bin/sh -c", "RUN").lstrip()]
 		return	history
 
 def main():
