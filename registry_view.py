@@ -346,6 +346,8 @@ class DockerRegistryV2:
             config_file = os.path.join(os.getenv("DOCKER_CONFIG"), "config.json")
         else:
             config_file = os.path.expanduser(os.path.join("~", ".docker", "config.json"))
+            if not os.path.exists(config_file):
+                config_file = os.path.expanduser(os.path.join("~", ".dockercfg"))
         if not os.path.exists(config_file):
             return
         auth = ""
