@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.15.3 by Ricardo Branco
+# v1.16 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.15.3"
+version = "1.16"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -53,6 +53,7 @@ Options:
         -k, --key  KEY          Client private key file name
         -p, --pass PASS         Pass phrase for the private key
         -u, --user USER[:PASS]  Server user and password (for HTTP Basic authentication)
+        -t, --time              Sort images by time with the newest ones coming first
         -v, --verbose           Be verbose. May be specified multiple times
         -V, --version           Show version string and quit
 
@@ -374,11 +375,6 @@ class DockerRegistryV2:
         f.close()
         return auth
 
-    def _pretty_date(self, ts):
-        """Converts date/time string in ISO-8601 format to date(1)"""
-        return strftime("%a %b %d %H:%M:%S %Z %Y",
-                        localtime(timegm(strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))))
-
     def _pretty_size(self, size):
         """Converts a size in bytes to a string in KB, MB, GB or TB"""
         if not size:
@@ -446,8 +442,7 @@ class DockerRegistryV2:
         info = {}
         manifest = self.get_manifest(repo, tag, 1)
         data = json.loads(manifest['history'][0]['v1Compatibility'])
-        info.update({key.title(): data[key] for key in ('architecture', 'docker_version', 'os')})
-        info['Created'] = self._pretty_date(data['created'])
+        info.update({key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')})
         keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir')
         info.update({key: data['config'][key] for key in keys if data['config'].get(key) is not None})
         # Before Docker 1.9.0, ID's were not digests but random bytes
@@ -477,12 +472,19 @@ class DockerRegistryV2:
         return history
 
 
+def pretty_date(ts):
+    """Converts date/time string in ISO-8601 format to date(1)"""
+    fmt = "%a %b %d %H:%M:%S %Z %Y"
+    return strftime(fmt, localtime(timegm(strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))))
+
+
 def main():
     parser = argparse.ArgumentParser(usage=usage, add_help=False)
     parser.add_argument('-c', '--cert')
     parser.add_argument('-k', '--key')
     parser.add_argument('-p', '--pass')
     parser.add_argument('-u', '--user')
+    parser.add_argument('-t', '--time', action='store_true')
     parser.add_argument('-h', '--help', action='store_true')
     parser.add_argument('-v', '--verbose', action='count')
     parser.add_argument('-V', '--version', action='store_true')
@@ -526,6 +528,8 @@ def main():
 
         # Print image info
 
+        info['Created'] = pretty_date(info['Created'])
+
         # Convert 'PATH=xxx foo=bar' into 'PATH="xxx" foo="bar"'
         info["Env"] = [re.sub('([^=]+)=(.*)', r'\1="\2"', env.replace('"', r'\"')) for env in info["Env"]]
 
@@ -562,11 +566,13 @@ def main():
 
     try:    # Python 3
         columns = shutil.get_terminal_size(fallback=(158, 40)).columns
-    except:    # Unix only
+    except: # Unix only
         columns = int(subprocess.check_output(['/bin/stty', 'size']).split()[1])
     cols = int(columns / 3)
 
     print("%-*s\t%-12s\t%-30s\t%s\t%s" % (cols, "Image", "Id", "Created on", "Docker", "Compressed Size"))
+
+    cache = {}
 
     for repo in reg.get_repositories():
         try:
@@ -579,9 +585,22 @@ def main():
                 info = reg.get_image_info(repo, tag)
             except DockerRegistryError as error:
                 print("%-*s\tERROR: %s" % (cols, repo + ":" + tag, error))
+                continue
+            if args.time:
+                cache[repo + ":" + tag] = info
             else:
+                info['Created'] = pretty_date(info['Created'])
                 print("%-*s\t%-12s\t%s\t%s\t%s" % (cols, repo + ":" + tag,
                       info['Digest'][0:12], info['Created'], info['Docker_Version'], info['CompressedSize']))
+
+    if not cache:
+        sys.exit(0)
+
+    # Show output sorted by time
+    for image in sorted(cache, key=lambda k: cache[k]['Created'], reverse=True):
+        cache[image]['Created'] = pretty_date(cache[image]['Created'])
+        print("%-*s\t%-12s\t%s\t%s\t%s" % (cols, image,
+              cache[image]['Digest'][0:12], cache[image]['Created'], cache[image]['Docker_Version'], cache[image]['CompressedSize']))
 
 if __name__ == "__main__":
     try:
