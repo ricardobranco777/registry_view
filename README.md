@@ -11,6 +11,7 @@ Options:
 	-c, --cert CERT		Client certificate file name
 	-k, --key  KEY		Client private key file name
 	-p, --pass PASS		Pass phrase for the private key
+	-t, --time 		Sort images by time with the newest ones coming first
 	-u, --user USER[:PASS]	Server user and password (for HTTP Basic authentication)
 	-v, --verbose		Be verbose. May be specified multiple times
 
