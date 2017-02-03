@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.16 by Ricardo Branco
+# v1.16.1 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.16"
+version = "1.16.1"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -53,6 +53,7 @@ Options:
         -k, --key  KEY          Client private key file name
         -p, --pass PASS         Pass phrase for the private key
         -u, --user USER[:PASS]  Server user and password (for HTTP Basic authentication)
+        -s, --size              Sort images by size with the largest ones coming first
         -t, --time              Sort images by time with the newest ones coming first
         -v, --verbose           Be verbose. May be specified multiple times
         -V, --version           Show version string and quit
@@ -375,17 +376,6 @@ class DockerRegistryV2:
         f.close()
         return auth
 
-    def _pretty_size(self, size):
-        """Converts a size in bytes to a string in KB, MB, GB or TB"""
-        if not size:
-            return ""
-        if size < 1024:
-            return str(size)
-        units = ('', 'K', 'M', 'G', 'T')
-        for n in (4, 3, 2, 1):
-            if (size > 1024**n):
-                return "%.2f %cB" % ((float(size) / 1024**n), units[n])
-
     def _get_paginated(self, s):
         """Get paginated results when the Registry is too large"""
         elements = []
@@ -458,7 +448,6 @@ class DockerRegistryV2:
             # Calculate compressed size
             info['CompressedSize'] = sum((item['size'] for item in manifest['layers']))
         info['Digest'] = info['Digest'].replace('sha256:', '')
-        info['CompressedSize'] = self._pretty_size(info.get('CompressedSize'))
         return info
 
     def get_image_history(self, repo, tag):
@@ -472,8 +461,19 @@ class DockerRegistryV2:
         return history
 
 
+# Converts a size in bytes to a string in KB, MB, GB or TB
+def pretty_size(size):
+    if not size:
+        return ""
+    if size < 1024:
+        return str(size)
+    units = ('', 'K', 'M', 'G', 'T')
+    for n in (4, 3, 2, 1):
+        if (size > 1024**n):
+            return "%.2f %cB" % ((float(size) / 1024**n), units[n])
+
+# Converts date/time string in ISO-8601 format to date(1)
 def pretty_date(ts):
-    """Converts date/time string in ISO-8601 format to date(1)"""
     fmt = "%a %b %d %H:%M:%S %Z %Y"
     return strftime(fmt, localtime(timegm(strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))))
 
@@ -484,6 +484,7 @@ def main():
     parser.add_argument('-k', '--key')
     parser.add_argument('-p', '--pass')
     parser.add_argument('-u', '--user')
+    parser.add_argument('-s', '--size', action='store_true')
     parser.add_argument('-t', '--time', action='store_true')
     parser.add_argument('-h', '--help', action='store_true')
     parser.add_argument('-v', '--verbose', action='count')
@@ -528,6 +529,7 @@ def main():
 
         # Print image info
 
+        info['CompressedSize'] = pretty_size(info.get('CompressedSize'))
         info['Created'] = pretty_date(info['Created'])
 
         # Convert 'PATH=xxx foo=bar' into 'PATH="xxx" foo="bar"'
@@ -586,19 +588,27 @@ def main():
             except DockerRegistryError as error:
                 print("%-*s\tERROR: %s" % (cols, repo + ":" + tag, error))
                 continue
-            if args.time:
+            if args.size or args.time:
                 cache[repo + ":" + tag] = info
             else:
                 info['Created'] = pretty_date(info['Created'])
+                info['CompressedSize'] = pretty_size(info.get('CompressedSize'))
                 print("%-*s\t%-12s\t%s\t%s\t%s" % (cols, repo + ":" + tag,
                       info['Digest'][0:12], info['Created'], info['Docker_Version'], info['CompressedSize']))
 
     if not cache:
         sys.exit(0)
 
-    # Show output sorted by time
-    for image in sorted(cache, key=lambda k: cache[k]['Created'], reverse=True):
+    # Show output sorted by size or time
+    images = []
+    if args.size:
+        images = sorted(cache, key=lambda k: cache[k].get('CompressedSize', 0), reverse=True)
+    elif args.time:
+        images = sorted(cache, key=lambda k: cache[k]['Created'], reverse=True)
+
+    for image in images:
         cache[image]['Created'] = pretty_date(cache[image]['Created'])
+        cache[image]['CompressedSize'] = pretty_size(cache[image].get('CompressedSize'))
         print("%-*s\t%-12s\t%s\t%s\t%s" % (cols, image,
               cache[image]['Digest'][0:12], cache[image]['Created'], cache[image]['Docker_Version'], cache[image]['CompressedSize']))
 
