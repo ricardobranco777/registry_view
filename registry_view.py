@@ -599,9 +599,6 @@ def main():
                 print("%-*s\t%-12s\t%s\t%s\t%s" % (cols, repo + ":" + tag,
                       info['Digest'][0:12], info['Created'], info['Docker_Version'], info['CompressedSize']))
 
-    if not cache:
-        sys.exit(0)
-
     # Show output sorted by size or time
     images = []
     if args.size:
