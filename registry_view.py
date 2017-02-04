@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.16.1 by Ricardo Branco
+# v1.16.2 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.16.1"
+version = "1.16.2"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -53,6 +53,7 @@ Options:
         -k, --key  KEY          Client private key file name
         -p, --pass PASS         Pass phrase for the private key
         -u, --user USER[:PASS]  Server user and password (for HTTP Basic authentication)
+        -r, --reverse           Reverse order with the -s & -t options
         -s, --size              Sort images by size with the largest ones coming first
         -t, --time              Sort images by time with the newest ones coming first
         -v, --verbose           Be verbose. May be specified multiple times
@@ -472,6 +473,7 @@ def pretty_size(size):
         if (size > 1024**n):
             return "%.2f %cB" % ((float(size) / 1024**n), units[n])
 
+
 # Converts date/time string in ISO-8601 format to date(1)
 def pretty_date(ts):
     fmt = "%a %b %d %H:%M:%S %Z %Y"
@@ -484,6 +486,7 @@ def main():
     parser.add_argument('-k', '--key')
     parser.add_argument('-p', '--pass')
     parser.add_argument('-u', '--user')
+    parser.add_argument('-r', '--reverse', action='store_false')
     parser.add_argument('-s', '--size', action='store_true')
     parser.add_argument('-t', '--time', action='store_true')
     parser.add_argument('-h', '--help', action='store_true')
@@ -566,9 +569,9 @@ def main():
 
     # Print information on all images
 
-    try:    # Python 3
+    try:     # Python 3
         columns = shutil.get_terminal_size(fallback=(158, 40)).columns
-    except: # Unix only
+    except:  # Unix only
         columns = int(subprocess.check_output(['/bin/stty', 'size']).split()[1])
     cols = int(columns / 3)
 
@@ -602,9 +605,9 @@ def main():
     # Show output sorted by size or time
     images = []
     if args.size:
-        images = sorted(cache, key=lambda k: cache[k].get('CompressedSize', 0), reverse=True)
+        images = sorted(cache, key=lambda k: cache[k].get('CompressedSize', 0), reverse=args.reverse)
     elif args.time:
-        images = sorted(cache, key=lambda k: cache[k]['Created'], reverse=True)
+        images = sorted(cache, key=lambda k: cache[k]['Created'], reverse=args.reverse)
 
     for image in images:
         cache[image]['Created'] = pretty_date(cache[image]['Created'])
