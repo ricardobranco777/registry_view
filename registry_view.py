@@ -227,8 +227,8 @@ class DockerRegistryECR:
         info = {}
         data = self._c.describe_images(registryId=self._registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
         data = data['imageDetails'][0]
-        info['Digest'] = data['imageDigest']
-        info['CompressedSize'] = data['imageSizeInBytes']
+        keys = (('Digest', 'imageDigest'), ('CompressedSize', 'imageSizeInBytes'))
+        info.update({k1: data[k2] for (k1, k2) in keys})
         return info
 
     def get_manifest(self, repo, tag):
