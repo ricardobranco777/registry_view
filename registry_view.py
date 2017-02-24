@@ -258,7 +258,7 @@ class DockerRegistryV2:
         if not re.match("https?://", self._registry):
             self._registry = "https://" + self._registry
         # Check for AWS EC2 Container Registry
-        if re.match("(?:https?://)?[0-9]{12}\.dkr\.ecr\.[a-z0-9]+[a-z0-9-]*\.amazonaws\.com(?::\d+)?$", self._registry):
+        if re.match("(?:https?://)?[0-9]{12}\.dkr\.ecr\.[a-z0-9]+[a-z0-9-]*\.amazonaws\.com(?::[0-9]+)?$", self._registry):
             self._aws_ecr = DockerRegistryECR(self._registry)
             return
         # Set credentials if specified or set in ~/.docker/config.json
@@ -357,7 +357,7 @@ class DockerRegistryV2:
         f = open(os.path.expanduser("~/.docker/config.json"), "r")
         config = json.load(f)
         try_registry = [re.sub("^https?://", "", self._registry)]
-        if not re.search(':\d+$', try_registry[0]):
+        if not re.search(':[0-9]+$', try_registry[0]):
             if self._registry.startswith('https://'):
                 try_registry += [try_registry[0] + ':443']
             elif self._registry.startswith('http://'):
@@ -505,7 +505,7 @@ def main():
         print('usage: ' + usage, file=sys.stderr)
         sys.exit(1)
 
-    m = re.search('^((?:https?://)?[^:/]+(?::\d+)?)/*(.*)', args.image)
+    m = re.search('^((?:https?://)?[^:/]+(?::[0-9]+)?)/*(.*)', args.image)
     try:
         registry, args.image = m.group(1), m.group(2)
     except AttributeError:
