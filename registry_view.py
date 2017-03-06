@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.16.2 by Ricardo Branco
+# v1.16.3 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.16.2"
+version = "1.16.3"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -354,7 +354,7 @@ class DockerRegistryV2:
         if not os.path.exists(config_file):
             return
         auth = ""
-        f = open(os.path.expanduser("~/.docker/config.json"), "r")
+        f = open(os.path.expanduser(config_file), "r")
         config = json.load(f)
         try_registry = [re.sub("^https?://", "", self._registry)]
         if not re.search(':[0-9]+$', try_registry[0]):
