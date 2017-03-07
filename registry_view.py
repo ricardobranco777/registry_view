@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.16.3 by Ricardo Branco
+# v1.16.4 by Ricardo Branco
 #
 # MIT License
 
@@ -45,7 +45,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.16.3"
+version = "1.16.4"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -434,7 +434,7 @@ class DockerRegistryV2:
         info['Digest'] = "-"
         if self._aws_ecr is not None:
             info.update(self._aws_ecr.get_image_info(repo, tag))
-        elif info['Docker_Version'] and int(info['Docker_Version'].replace('.', '')) >= 190:
+        elif info['Docker_Version'] and int(re.sub('[^0-9]+', '', info['Docker_Version'])) >= 190:
             manifest = self.get_manifest(repo, tag, 2)
             try:
                 info['Digest'] = manifest['config']['digest']
@@ -569,7 +569,7 @@ def main():
         columns = int(subprocess.check_output(['/bin/stty', 'size']).split()[1])
     cols = int(columns / 3)
 
-    print("%-*s\t%-12s\t%-30s\t%s\t%s" % (cols, "Image", "Id", "Created on", "Docker", "Compressed Size"))
+    print("%-*s\t%-12s\t%-30s\t%-12s%s" % (cols, "Image", "Id", "Created on", "Docker", "Compressed Size"))
 
     cache = {}
 
@@ -590,7 +590,7 @@ def main():
             else:
                 info['Created'] = pretty_date(info['Created'])
                 info['CompressedSize'] = pretty_size(info.get('CompressedSize'))
-                print("%-*s\t%-12s\t%s\t%s\t%s" % (cols, repo + ":" + tag,
+                print("%-*s\t%-12s\t%-30s\t%-12s%s" % (cols, repo + ":" + tag,
                       info['Digest'][0:12], info['Created'], info['Docker_Version'], info['CompressedSize']))
 
     # Show output sorted by size or time
