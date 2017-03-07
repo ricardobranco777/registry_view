@@ -193,8 +193,7 @@ class DockerRegistryECR:
         except NoCredentialsError:
             print("ERROR: Unable to locate credentials", file=sys.stderr)
             sys.exit(1)
-        m = re.search("^(?:https?://)?([0-9]{12})\.*", registry)
-        self._registryId = m.group(1)
+        self._registryId = re.findall("^(?:https?://)?([0-9]{12})\.*", registry)[0]
 
     def get_repositories(self):
         """Returns a list of repositories"""
@@ -224,12 +223,10 @@ class DockerRegistryECR:
             return self._cached_info[repo][tag]
         except KeyError:
             pass
-        info = {}
         data = self._c.describe_images(registryId=self._registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
         data = data['imageDetails'][0]
         keys = (('Digest', 'imageDigest'), ('CompressedSize', 'imageSizeInBytes'))
-        info.update({k1: data[k2] for (k1, k2) in keys})
-        return info
+        return {k1: data[k2] for (k1, k2) in keys}
 
     def get_manifest(self, repo, tag):
         """Returns the image manifest as a dictionary"""
@@ -354,8 +351,8 @@ class DockerRegistryV2:
         if not os.path.exists(config_file):
             return
         auth = ""
-        f = open(os.path.expanduser(config_file), "r")
-        config = json.load(f)
+        with open(os.path.expanduser(config_file), "r") as f:
+            config = json.load(f)
         try_registry = [re.sub("^https?://", "", self._registry)]
         if not re.search(':[0-9]+$', try_registry[0]):
             if self._registry.startswith('https://'):
@@ -374,7 +371,6 @@ class DockerRegistryV2:
                     break
             except KeyError:
                 pass
-        f.close()
         return auth
 
     def _get_paginated(self, s):
@@ -384,8 +380,7 @@ class DockerRegistryV2:
             url = self._c.get_headers('link')
             if url is None:
                 break
-            m = re.match('</v2/(.*)>; rel="next"', url)
-            url = m.group(1)
+            url = re.findall('</v2/(.*)>; rel="next"', url)[0]
             data = self._get(url)
             elements += data[s]
         return elements
@@ -430,10 +425,9 @@ class DockerRegistryV2:
 
     def get_image_info(self, repo, tag):
         """Returns a dictionary with image info containing the most interesting items"""
-        info = {}
         manifest = self.get_manifest(repo, tag, 1)
         data = json.loads(manifest['history'][0]['v1Compatibility'])
-        info.update({key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')})
+        info = {key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')}
         keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir')
         info.update({key: data['config'][key] for key in keys if data['config'].get(key) is not None})
         # Before Docker 1.9.0, ID's were not digests but random bytes
