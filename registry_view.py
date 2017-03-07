@@ -542,12 +542,12 @@ def main():
         keys.sort()
         for key in keys:
             value = info[key]
-            if type(value) is dict:
+            if isinstance(value, dict):
                 if key == "Labels" or key == "Healthcheck":
                     value = str(json.dumps(value))
                 else:
                     value = list(value)
-            if type(value) is list:
+            if isinstance(value, list):
                 if key in ('Env', 'ExposedPorts'):
                     value = " ".join(sorted(value))
                 else:
