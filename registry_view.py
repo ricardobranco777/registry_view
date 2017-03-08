@@ -19,6 +19,7 @@ from calendar import timegm
 from datetime import datetime
 from time import localtime, sleep, strptime, strftime
 from getpass import getpass
+from distutils.version import LooseVersion
 
 try:
     import pycurl
@@ -434,7 +435,7 @@ class DockerRegistryV2:
         info['Digest'] = "-"
         if self._aws_ecr is not None:
             info.update(self._aws_ecr.get_image_info(repo, tag))
-        elif info['Docker_Version'] and int(re.sub('[^0-9]+', '', info['Docker_Version'])) >= 190:
+        elif info['Docker_Version'] and LooseVersion(info['Docker_Version']) >= LooseVersion("1.9.0"):
             manifest = self.get_manifest(repo, tag, 2)
             try:
                 info['Digest'] = manifest['config']['digest']
