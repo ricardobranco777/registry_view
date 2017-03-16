@@ -13,10 +13,14 @@
 
 from __future__ import print_function
 
-import argparse, base64, json, os, re, string, sys
+import argparse
+import base64
+import json
+import os
+import re
+import sys
 
 from calendar import timegm
-from datetime import datetime
 from time import localtime, sleep, strptime, strftime
 from getpass import getpass
 from distutils.version import LooseVersion
@@ -65,6 +69,19 @@ Note: Default PORT is 443. You must prepend "http://" to REGISTRY if running on 
 
 os.environ['LC_ALL'] = 'C.UTF-8'
 
+# Debug function used to mimic curl's debug output
+def debug_function(t, m):
+    curl_prefix = {pycurl.INFOTYPE_TEXT: '* ',
+                   pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
+                   pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: ''}
+    # Ignore SSL info types
+    if curl_prefix.get(t) is None:
+        return
+    m = m.decode('iso-8859-1').rstrip()
+    if t == pycurl.INFOTYPE_HEADER_OUT:
+        m = m.replace(r'\n', r'\n' + curl_prefix[t])
+    print(curl_prefix[t] + m)
+
 
 class Curl:
     """This class encapsulates PyCurl operations"""
@@ -83,7 +100,7 @@ class Curl:
         self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
         if opts['verbose'] is not None:
             if opts['verbose'] > 1:
-                self.c.setopt(pycurl.DEBUGFUNCTION, self._debug_function)
+                self.c.setopt(pycurl.DEBUGFUNCTION, debug_function)
         self.c.setopt(pycurl.HEADERFUNCTION, self._header_function)
         self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
         self.buf = BytesIO()
@@ -96,19 +113,6 @@ class Curl:
         """Closes the pycurl handle"""
         self.buf.close()
         self.c.close()
-
-    def _debug_function(self, t, m):
-        """Debug function used to mimic curl's debug output"""
-        curl_prefix = {pycurl.INFOTYPE_TEXT: '* ',
-                       pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
-                       pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: ''}
-        # Ignore SSL info types
-        if curl_prefix.get(t) is None:
-            return
-        m = m.decode('iso-8859-1').rstrip()
-        if t == pycurl.INFOTYPE_HEADER_OUT:
-            m = m.replace(r'\n', r'\n' + curl_prefix[t])
-        print(curl_prefix[t] + m)
 
     # Adapted from https://github.com/pycurl/pycurl/blob/master/examples/quickstart/response_headers.py
     def _header_function(self, header_line):
@@ -189,12 +193,8 @@ class DockerRegistryECR:
         except ImportError:
             print("ERROR: Install the boto3 Python library to get data from AWS ECR", file=sys.stderr)
             sys.exit(1)
-        try:
-            self._c = boto3.client('ecr')
-        except NoCredentialsError:
-            print("ERROR: Unable to locate credentials", file=sys.stderr)
-            sys.exit(1)
-        self._registryId = re.findall("^(?:https?://)?([0-9]{12})\.*", registry)[0]
+        self._c = boto3.client('ecr')
+        self._registryId = re.findall(r"^(?:https?://)?([0-9]{12})\.*", registry)[0]
 
     def get_repositories(self):
         """Returns a list of repositories"""
@@ -256,7 +256,7 @@ class DockerRegistryV2:
         if not re.match("https?://", self._registry):
             self._registry = "https://" + self._registry
         # Check for AWS EC2 Container Registry
-        if re.match("(?:https?://)?[0-9]{12}\.dkr\.ecr\.[a-z0-9]+[a-z0-9-]*\.amazonaws\.com(?::[0-9]+)?$", self._registry):
+        if re.match(r"(?:https?://)?[0-9]{12}\.dkr\.ecr\.[a-z0-9]+[a-z0-9-]*\.amazonaws\.com(?::[0-9]+)?$", self._registry):
             self._aws_ecr = DockerRegistryECR(self._registry)
             return
         # Set credentials if specified or set in ~/.docker/config.json
@@ -282,7 +282,7 @@ class DockerRegistryV2:
         """Returns the token from the response_header"""
         fields = {k: v for (k, v) in re.findall(',?([^=]+)="([^"]+)"', response_header)}
         url = fields['Bearer realm']
-        del(fields['Bearer realm'])
+        del fields['Bearer realm']
         fields = urlencode(fields)
         if use_post:
             token = json.loads(self._c.post(url, fields, auth=self._auth_basic()))['token']
@@ -465,14 +465,14 @@ def pretty_size(size):
         return str(size)
     units = ('', 'K', 'M', 'G', 'T')
     for n in (4, 3, 2, 1):
-        if (size > 1024**n):
+        if size > 1024**n:
             return "%.2f %cB" % ((float(size) / 1024**n), units[n])
 
 
 # Converts date/time string in ISO-8601 format to date(1)
 def pretty_date(ts):
     fmt = "%a %b %d %H:%M:%S %Z %Y"
-    return strftime(fmt, localtime(timegm(strptime(re.sub("\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))))
+    return strftime(fmt, localtime(timegm(strptime(re.sub(r"\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))))
 
 
 def main():
@@ -566,7 +566,7 @@ def main():
 
     try:     # Python 3
         columns = shutil.get_terminal_size(fallback=(158, 40)).columns
-    except:  # Unix only
+    except NameError:  # Unix only
         columns = int(subprocess.check_output(['/bin/stty', 'size']).split()[1])
     cols = int(columns / 3)
 
@@ -591,8 +591,8 @@ def main():
             else:
                 info['Created'] = pretty_date(info['Created'])
                 info['CompressedSize'] = pretty_size(info.get('CompressedSize'))
-                print("%-*s\t%-12s\t%-30s\t%-12s%s" % (cols, repo + ":" + tag,
-                      info['Digest'][0:12], info['Created'], info['Docker_Version'], info['CompressedSize']))
+                print("%-*s\t%-12s\t%-30s\t%-12s%s" %
+                      (cols, repo + ":" + tag, info['Digest'][0:12], info['Created'], info['Docker_Version'], info['CompressedSize']))
 
     # Show output sorted by size or time
     images = []
@@ -604,8 +604,8 @@ def main():
     for image in images:
         cache[image]['Created'] = pretty_date(cache[image]['Created'])
         cache[image]['CompressedSize'] = pretty_size(cache[image].get('CompressedSize'))
-        print("%-*s\t%-12s\t%s\t%s\t%s" % (cols, image,
-              cache[image]['Digest'][0:12], cache[image]['Created'], cache[image]['Docker_Version'], cache[image]['CompressedSize']))
+        print("%-*s\t%-12s\t%s\t%s\t%s" %
+              (cols, image, cache[image]['Digest'][0:12], cache[image]['Created'], cache[image]['Docker_Version'], cache[image]['CompressedSize']))
 
 if __name__ == "__main__":
     try:
