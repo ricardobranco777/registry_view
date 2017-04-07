@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.16.4 by Ricardo Branco
+# v1.16.5 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.16.4"
+version = "1.16.5"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -503,14 +503,19 @@ def image_info(reg, image):
         value = info[key]
         if isinstance(value, dict):
             if key == "Labels" or key == "Healthcheck":
-                value = str(json.dumps(value))
+                if value:
+                    value = str(json.dumps(value))
+                else:
+                    value = ""
             else:
                 value = list(value)
         if isinstance(value, list):
             if key in ('Env', 'ExposedPorts'):
                 value = " ".join(sorted(value))
-            else:
+            elif value:
                 value = "[ '" + "".join("', '".join(item for item in value)) + "' ]"
+            else:
+                value = ""
         if not PY3:
             value = value.encode('utf-8')
         print('%-15s\t%s' % (key.replace('_', ''), value))
