@@ -475,6 +475,57 @@ def pretty_date(ts):
     return strftime(fmt, localtime(timegm(strptime(re.sub(r"\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))))
 
 
+# Print image info
+def image_info(reg, image):
+    def registry_error(error):
+        print("ERROR: %s: %s" % ((image), error), file=sys.stderr)
+        sys.exit(1)
+
+    if ':' in image:
+        repo, tag = image.rsplit(':', 1)
+    else:
+        repo, tag = image, "latest"
+
+    try:
+        info = reg.get_image_info(repo, tag)
+    except DockerRegistryError as error:
+        registry_error(error)
+
+    info['CompressedSize'] = pretty_size(info.get('CompressedSize'))
+    info['Created'] = pretty_date(info['Created'])
+
+    # Convert 'PATH=xxx foo=bar' into 'PATH="xxx" foo="bar"'
+    info["Env"] = [re.sub('([^=]+)=(.*)', r'\1="\2"', env.replace('"', r'\"')) for env in info["Env"]]
+
+    keys = list(info)
+    keys.sort()
+    for key in keys:
+        value = info[key]
+        if isinstance(value, dict):
+            if key == "Labels" or key == "Healthcheck":
+                value = str(json.dumps(value))
+            else:
+                value = list(value)
+        if isinstance(value, list):
+            if key in ('Env', 'ExposedPorts'):
+                value = " ".join(sorted(value))
+            else:
+                value = "[ '" + "".join("', '".join(item for item in value)) + "' ]"
+        if not PY3:
+            value = value.encode('utf-8')
+        print('%-15s\t%s' % (key.replace('_', ''), value))
+
+    # Print image history
+    try:
+        history = reg.get_image_history(repo, tag)
+    except DockerRegistryError as error:
+        registry_error(error)
+    for i, layer in enumerate(history, 1):
+        if not PY3:
+            layer = layer.encode('utf-8')
+        print('%-15s\t%s' % ('History[' + str(i) + ']', layer))
+
+
 def main():
     parser = argparse.ArgumentParser(usage=usage, add_help=False)
     parser.add_argument('-c', '--cert')
@@ -511,55 +562,7 @@ def main():
 
     # Print information for a specific image
     if args.image:
-        def registry_error(error):
-            print("ERROR: %s: %s" % ((args.image), error), file=sys.stderr)
-            sys.exit(1)
-
-        if ':' in args.image:
-            repo, tag = args.image.rsplit(':', 1)
-        else:
-            repo, tag = args.image, "latest"
-
-        try:
-            info = reg.get_image_info(repo, tag)
-        except DockerRegistryError as error:
-            registry_error(error)
-
-        # Print image info
-
-        info['CompressedSize'] = pretty_size(info.get('CompressedSize'))
-        info['Created'] = pretty_date(info['Created'])
-
-        # Convert 'PATH=xxx foo=bar' into 'PATH="xxx" foo="bar"'
-        info["Env"] = [re.sub('([^=]+)=(.*)', r'\1="\2"', env.replace('"', r'\"')) for env in info["Env"]]
-
-        keys = list(info)
-        keys.sort()
-        for key in keys:
-            value = info[key]
-            if isinstance(value, dict):
-                if key == "Labels" or key == "Healthcheck":
-                    value = str(json.dumps(value))
-                else:
-                    value = list(value)
-            if isinstance(value, list):
-                if key in ('Env', 'ExposedPorts'):
-                    value = " ".join(sorted(value))
-                else:
-                    value = "[ '" + "".join("', '".join(item for item in value)) + "' ]"
-            if not PY3:
-                value = value.encode('utf-8')
-            print('%-15s\t%s' % (key.replace('_', ''), value))
-
-        # Print image history
-        try:
-            history = reg.get_image_history(repo, tag)
-        except DockerRegistryError as error:
-            registry_error(error)
-        for i, layer in enumerate(history, 1):
-            if not PY3:
-                layer = layer.encode('utf-8')
-            print('%-15s\t%s' % ('History[' + str(i) + ']', layer))
+        image_info(reg, args.image)
         sys.exit(0)
 
     # Print information on all images
@@ -606,6 +609,7 @@ def main():
         cache[image]['CompressedSize'] = pretty_size(cache[image].get('CompressedSize'))
         print("%-*s\t%-12s\t%s\t%s\t%s" %
               (cols, image, cache[image]['Digest'][0:12], cache[image]['Created'], cache[image]['Docker_Version'], cache[image]['CompressedSize']))
+
 
 if __name__ == "__main__":
     try:
