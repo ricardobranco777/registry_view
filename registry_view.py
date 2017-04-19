@@ -550,7 +550,7 @@ def main():
         print('usage: ' + usage)
         sys.exit(0)
     elif args.version:
-        print(sys.argv[0] + " " + version + " " + pycurl.version)
+        print(progname + " " + version + " " + pycurl.version)
         sys.exit(0)
     elif not args.image:
         print('usage: ' + usage, file=sys.stderr)
