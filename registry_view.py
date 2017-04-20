@@ -98,9 +98,8 @@ class Curl:
             if opts[opt] is not None:
                 self.c.setopt(curlopt, opts[opt])
         self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
-        if opts['verbose'] is not None:
-            if opts['verbose'] > 1:
-                self.c.setopt(pycurl.DEBUGFUNCTION, debug_function)
+        if opts['verbose'] is not None and opts['verbose'] > 1:
+             self.c.setopt(pycurl.DEBUGFUNCTION, debug_function)
         self.c.setopt(pycurl.HEADERFUNCTION, self._header_function)
         self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
         self.buf = BytesIO()
@@ -121,7 +120,7 @@ class Curl:
         header_line = header_line.decode('iso-8859-1')
         # Header lines include the first status line (HTTP/1.x ...)
         if ':' not in header_line:
-            if self.headers.get('HTTP_STATUS') is None:
+            if 'HTTP_STATUS' not in self.headers:
                 self.headers['HTTP_STATUS'] = header_line.strip()
             return
         # Break the header line into header name and value.
@@ -260,9 +259,8 @@ class DockerRegistryV2:
             self._aws_ecr = DockerRegistryECR(self._registry)
             return
         # Set credentials if specified or set in ~/.docker/config.json
-        if args['user'] is not None:
-            if ':' not in args['user']:
-                args['user'] += ":" + getpass("Password: ")
+        if args['user'] is not None and ':' not in args['user']:
+            args['user'] += ":" + getpass("Password: ")
         if args['user'] is not None:
             self._basic_auth = str(base64.b64encode(args['user'].encode()).decode('ascii'))
         else:
