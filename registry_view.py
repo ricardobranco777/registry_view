@@ -448,7 +448,7 @@ class DockerRegistryV2:
         """Returns a list containing the image history (layers)"""
         history = []
         manifest = self.get_manifest(repo, tag, 1)
-        os = json.loads(manifest['history'][0]['v1Compatibility'])['config']['os']
+        os = json.loads(manifest['history'][0]['v1Compatibility'])['os']
         if os == "windows":
             shell_cmd = 'cmd /S /C'
         else:
