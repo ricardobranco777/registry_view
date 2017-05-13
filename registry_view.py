@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.16.5 by Ricardo Branco
+# v1.16.6 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.16.5"
+version = "1.16.6"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -448,10 +448,14 @@ class DockerRegistryV2:
         """Returns a list containing the image history (layers)"""
         history = []
         manifest = self.get_manifest(repo, tag, 1)
-        prefix = '/bin/sh -c #(nop)'
+        os = json.loads(manifest['history'][0]['v1Compatibility'])['config']['os']
+        if os == "windows":
+            shell_cmd = 'cmd /S /C'
+        else:
+            shell = '/bin/sh -c'
         for item in reversed(manifest['history']):
             data = json.loads(item['v1Compatibility'])['container_config']['Cmd']
-            history += [" ".join(data).replace(prefix, "").replace("/bin/sh -c", "RUN").lstrip()]
+            history += [" ".join(data).replace(shell + ' #(nop)', "").replace(shell, "RUN").lstrip()]
         return history
 
 
