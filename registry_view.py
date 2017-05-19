@@ -450,7 +450,7 @@ class DockerRegistryV2:
         manifest = self.get_manifest(repo, tag, 1)
         os = json.loads(manifest['history'][0]['v1Compatibility'])['os']
         if os == "windows":
-            shell_cmd = 'cmd /S /C'
+            shell = 'cmd /S /C'
         else:
             shell = '/bin/sh -c'
         for item in reversed(manifest['history']):
