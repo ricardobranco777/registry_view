@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.16.6 by Ricardo Branco
+# v1.17 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.16.6"
+version = "1.17"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -427,7 +427,7 @@ class DockerRegistryV2:
         manifest = self.get_manifest(repo, tag, 1)
         data = json.loads(manifest['history'][0]['v1Compatibility'])
         info = {key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')}
-        keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'User', 'Volumes', 'WorkingDir')
+        keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'Shell', 'User', 'Volumes', 'WorkingDir')
         info.update({key: data['config'][key] for key in keys if data['config'].get(key) is not None})
         # Before Docker 1.9.0, ID's were not digests but random bytes
         info['Digest'] = "-"
@@ -448,14 +448,8 @@ class DockerRegistryV2:
         """Returns a list containing the image history (layers)"""
         history = []
         manifest = self.get_manifest(repo, tag, 1)
-        os = json.loads(manifest['history'][0]['v1Compatibility'])['os']
-        if os == "windows":
-            shell = 'cmd /S /C'
-        else:
-            shell = '/bin/sh -c'
         for item in reversed(manifest['history']):
-            data = json.loads(item['v1Compatibility'])['container_config']['Cmd']
-            history += [" ".join(data).replace(shell + ' #(nop)', "").replace(shell, "RUN").lstrip()]
+            history += [" ".join(json.loads(item['v1Compatibility'])['container_config']['Cmd'])]
         return history
 
 
@@ -527,7 +521,18 @@ def image_info(reg, image):
         history = reg.get_image_history(repo, tag)
     except DockerRegistryError as error:
         registry_error(error)
+    if info['Os'] == "windows":
+        shell = 'cmd /S /C'
+    else:
+        shell = '/bin/sh -c'
     for i, layer in enumerate(history, 1):
+        # The format of the SHELL command in the manifest is:
+        # "/bin/bash -c #(nop)  SHELL [/bin/bash -c]" when 'SHELL ["/bin/bash", "-c"]' is used in the Dockerfile
+        m = re.match("(.*) #\(nop\)  SHELL \[(.*)\]$", layer)
+        if m and len(m.groups()) == 2 and m.group(1) == m.group(2):
+            shell = m.group(1)
+        layer = re.sub('^' + shell + r' #\(nop\)', "", layer)
+        layer = re.sub('^' + shell, "RUN", layer).lstrip()
         if not PY3:
             layer = layer.encode('utf-8')
         print('%-15s\t%s' % ('History[' + str(i) + ']', layer))
