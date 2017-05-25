@@ -19,6 +19,3 @@ Options:
 
 Note: Default port is 443. You must specify "http://..." if running on plain HTTP.
 
-# TODO
-
-Support SHELL instruction in Dockerfile when displaying history
