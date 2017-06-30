@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.17 by Ricardo Branco
+# v1.17.1 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.17"
+version = "1.17.1"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -619,7 +619,7 @@ def main():
     for image in images:
         cache[image]['Created'] = pretty_date(cache[image]['Created'])
         cache[image]['CompressedSize'] = pretty_size(cache[image].get('CompressedSize'))
-        print("%-*s\t%-12s\t%s\t%s\t%s" %
+        print("%-*s\t%-12s\t%-30s\t%-12s%s" %
               (cols, image, cache[image]['Digest'][0:12], cache[image]['Created'], cache[image]['Docker_Version'], cache[image]['CompressedSize']))
 
 
