@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.17.1 by Ricardo Branco
+# v1.18 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.17.1"
+version = "1.18"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -587,7 +587,7 @@ def main():
 
     print("%-*s\t%-12s\t%-30s\t%-12s%s" % (cols, "Image", "Id", "Created on", "Docker", "Compressed Size"))
 
-    cache = {}
+    info = {}
 
     for repo in reg.get_repositories():
         try:
@@ -595,32 +595,34 @@ def main():
         except DockerRegistryError as error:
             print("%-*s\tERROR: %s" % (cols, repo, error))
             continue
+        if not (args.size or args.time):
+            info = {}
         for tag in tags:
             try:
-                info = reg.get_image_info(repo, tag)
+                info[repo + ":" + tag] = reg.get_image_info(repo, tag)
             except DockerRegistryError as error:
                 print("%-*s\tERROR: %s" % (cols, repo + ":" + tag, error))
                 continue
-            if args.size or args.time:
-                cache[repo + ":" + tag] = info
-            else:
-                info['Created'] = pretty_date(info['Created'])
-                info['CompressedSize'] = pretty_size(info.get('CompressedSize'))
-                print("%-*s\t%-12s\t%-30s\t%-12s%s" %
-                      (cols, repo + ":" + tag, info['Digest'][0:12], info['Created'], info['Docker_Version'], info['CompressedSize']))
+        if args.size or args.time:
+            continue
+        for image in sorted(info, key=lambda k: info[k]['Created'], reverse=not args.reverse):
+            info[image]['Created'] = pretty_date(info[image]['Created'])
+            info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
+            print("%-*s\t%-12s\t%-30s\t%-12s%s" %
+                  (cols, image, info[image]['Digest'][0:12], info[image]['Created'], info[image]['Docker_Version'], info[image]['CompressedSize']))
 
     # Show output sorted by size or time
     images = []
     if args.size:
-        images = sorted(cache, key=lambda k: cache[k].get('CompressedSize', 0), reverse=args.reverse)
+        images = sorted(info, key=lambda k: info[k].get('CompressedSize', 0), reverse=args.reverse)
     elif args.time:
-        images = sorted(cache, key=lambda k: cache[k]['Created'], reverse=args.reverse)
+        images = sorted(info, key=lambda k: info[k]['Created'], reverse=args.reverse)
 
     for image in images:
-        cache[image]['Created'] = pretty_date(cache[image]['Created'])
-        cache[image]['CompressedSize'] = pretty_size(cache[image].get('CompressedSize'))
+        info[image]['Created'] = pretty_date(info[image]['Created'])
+        info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
         print("%-*s\t%-12s\t%-30s\t%-12s%s" %
-              (cols, image, cache[image]['Digest'][0:12], cache[image]['Created'], cache[image]['Docker_Version'], cache[image]['CompressedSize']))
+              (cols, image, info[image]['Digest'][0:12], info[image]['Created'], info[image]['Docker_Version'], info[image]['CompressedSize']))
 
 
 if __name__ == "__main__":
