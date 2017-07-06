@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.18 by Ricardo Branco
+# v1.18.1 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.18"
+version = "1.18.1"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -457,10 +457,8 @@ class DockerRegistryV2:
 def pretty_size(size):
     if not size:
         return ""
-    if size < 1024:
-        return str(size)
-    units = ('', 'K', 'M', 'G', 'T')
-    for n in (4, 3, 2, 1):
+    units = (' ', 'K', 'M', 'G', 'T')
+    for n in range(4, -1, -1):
         if size > 1024**n:
             return "%.2f %cB" % ((float(size) / 1024**n), units[n])
 
@@ -608,7 +606,7 @@ def main():
         for image in sorted(info, key=lambda k: info[k]['Created'], reverse=not args.reverse):
             info[image]['Created'] = pretty_date(info[image]['Created'])
             info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
-            print("%-*s\t%-12s\t%-30s\t%-12s%s" %
+            print("%-*s\t%-12s\t%-30s\t%-12s%15s" %
                   (cols, image, info[image]['Digest'][0:12], info[image]['Created'], info[image]['Docker_Version'], info[image]['CompressedSize']))
 
     # Show output sorted by size or time
@@ -621,7 +619,7 @@ def main():
     for image in images:
         info[image]['Created'] = pretty_date(info[image]['Created'])
         info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
-        print("%-*s\t%-12s\t%-30s\t%-12s%s" %
+        print("%-*s\t%-12s\t%-30s\t%-12s%15s" %
               (cols, image, info[image]['Digest'][0:12], info[image]['Created'], info[image]['Docker_Version'], info[image]['CompressedSize']))
 
 
