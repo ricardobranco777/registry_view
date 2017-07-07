@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.18.1 by Ricardo Branco
+# v1.18.2 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.18.1"
+version = "1.18.2"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -603,7 +603,7 @@ def main():
                 continue
         if args.size or args.time:
             continue
-        for image in sorted(info, key=lambda k: info[k]['Created'], reverse=not args.reverse):
+        for image in sorted(info, key=lambda k: (info[k]['Created'], k), reverse=not args.reverse):
             info[image]['Created'] = pretty_date(info[image]['Created'])
             info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
             print("%-*s\t%-12s\t%-30s\t%-12s%15s" %
