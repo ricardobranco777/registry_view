@@ -390,7 +390,6 @@ class DockerRegistryV2:
         else:
             data = self._get("_catalog")
             repositories = data['repositories'] + self._get_paginated('repositories')
-        repositories.sort()
         return repositories
 
     def get_tags(self, repo):
@@ -400,7 +399,6 @@ class DockerRegistryV2:
         else:
             data = self._get(repo + "/tags/list")
             tags = data['tags'] + self._get_paginated('tags')
-        tags.sort()
         return tags
 
     def get_manifest(self, repo, tag, version):
@@ -490,8 +488,7 @@ def image_info(reg, image):
     info["Env"] = [re.sub('([^=]+)=(.*)', r'\1="\2"', env.replace('"', r'\"')) for env in info["Env"]]
 
     keys = list(info)
-    keys.sort()
-    for key in keys:
+    for key in sorted(keys):
         value = info[key]
         if isinstance(value, dict):
             if key == "Labels" or key == "Healthcheck":
