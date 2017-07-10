@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.18.2 by Ricardo Branco
+# v1.18.3 by Ricardo Branco
 #
 # MIT License
 
@@ -23,7 +23,6 @@ import sys
 from calendar import timegm
 from time import localtime, sleep, strptime, strftime
 from getpass import getpass
-from distutils.version import LooseVersion
 
 try:
     import pycurl
@@ -50,7 +49,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.18.2"
+version = "1.18.3"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -430,10 +429,9 @@ class DockerRegistryV2:
         keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'Shell', 'User', 'Volumes', 'WorkingDir')
         info.update({key: data['config'][key] for key in keys if data['config'].get(key) is not None})
         # Before Docker 1.9.0, ID's were not digests but random bytes
-        info['Digest'] = "-"
         if self._aws_ecr is not None:
             info.update(self._aws_ecr.get_image_info(repo, tag))
-        elif info['Docker_Version'] and LooseVersion(info['Docker_Version']) >= LooseVersion("1.9.0"):
+        else:
             manifest = self.get_manifest(repo, tag, 2)
             try:
                 info['Digest'] = manifest['config']['digest']
