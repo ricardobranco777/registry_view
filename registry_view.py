@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.18.3 by Ricardo Branco
+# v1.18.4 by Ricardo Branco
 #
 # MIT License
 
@@ -23,6 +23,7 @@ import sys
 from calendar import timegm
 from time import localtime, sleep, strptime, strftime
 from getpass import getpass
+from functools import partial
 
 try:
     import pycurl
@@ -49,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.18.3"
+version = "1.18.4"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -67,6 +68,20 @@ Note: Default PORT is 443. You must prepend "http://" to REGISTRY if running on 
 """
 
 os.environ['LC_ALL'] = 'C.UTF-8'
+
+class Memoize(object):
+    """Decorator for methods and functions to memorize the last recently used call"""
+    def __init__(self, func):
+        self.func = func
+        self.cache = {}
+    def __call__(self, *args):
+        if args not in self.cache:
+            self.cache = {}
+            self.cache[args] = self.func(*args)
+        return self.cache[args]
+    def __get__(self, obj, objtype):
+        return partial(self, obj)
+
 
 # Debug function used to mimic curl's debug output
 def debug_function(t, m):
@@ -182,7 +197,7 @@ class Curl:
 class DockerRegistryECR:
     """This class encapsulates Boto3 operations to get information from an EC2 Container Registry"""
 
-    _cached_info = {'': {}}
+    _cache = {'': {}}
 
     def __init__(self, registry):
         """Gets the boto3 handle"""
@@ -205,7 +220,7 @@ class DockerRegistryECR:
     def get_tags(self, repo):
         """Returns a list of tags for the specified repository"""
         tags = []
-        self._cached_info = {repo: {}}
+        self._cache = {repo: {}}
         keys = (('Digest', 'imageDigest'), ('CompressedSize', 'imageSizeInBytes'))
         image_filter = {'tagStatus': 'TAGGED'}
         paginator = self._c.get_paginator('describe_images')
@@ -213,13 +228,13 @@ class DockerRegistryECR:
             for item in response['imageDetails']:
                 tags += item['imageTags']
                 for tag in item['imageTags']:
-                    self._cached_info[repo][tag] = {k1: item[k2] for (k1, k2) in keys}
+                    self._cache[repo][tag] = {k1: item[k2] for (k1, k2) in keys}
         return tags
 
     def get_image_info(self, repo, tag):
         """Returns a dictionary with image info such as Digest and CompressedSize"""
         try:
-            return self._cached_info[repo][tag]
+            return self._cache[repo][tag]
         except KeyError:
             pass
         data = self._c.describe_images(registryId=self._registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
@@ -241,10 +256,9 @@ class DockerRegistryError(Exception):
 class DockerRegistryV2:
     """This class encapsulates operations to get information from a Docker Registry v2"""
 
-    _cached_manifest = {}
+    _aws_ecr = None
     _basic_auth = ""
     _headers = []
-    _aws_ecr = None
 
     def __init__(self, registry, **args):
         """Get a Curl handle and checks the type and availability of the Registry"""
@@ -401,32 +415,21 @@ class DockerRegistryV2:
             tags = data['tags'] + self._get_paginated('tags')
         return tags
 
+    @Memoize
     def get_manifest(self, repo, tag, version):
         """Returns the image manifest as a dictionary. The schema versions must be 1 or 2"""
         assert version in (1, 2)
         image = repo + ":" + tag
-        try:
-            manifest = self._cached_manifest[image][version]
-            if manifest:
-                return manifest
-        except KeyError:
-            self._cached_manifest = {image: ['', '', '']}
         if self._aws_ecr is not None:
             assert version == 1
-            self._cached_manifest[image][version] = self._aws_ecr.get_manifest(repo, tag)
+            return self._aws_ecr.get_manifest(repo, tag)
         else:
             headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)]
-            self._cached_manifest[image][version] = self._get(repo + "/manifests/" + tag, headers=headers)
-        return self._cached_manifest[image][version]
+            return self._get(repo + "/manifests/" + tag, headers=headers)
 
     def get_image_info(self, repo, tag):
         """Returns a dictionary with image info containing the most interesting items"""
-        manifest = self.get_manifest(repo, tag, 1)
-        data = json.loads(manifest['history'][0]['v1Compatibility'])
-        info = {key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')}
-        keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'Shell', 'User', 'Volumes', 'WorkingDir')
-        info.update({key: data['config'][key] for key in keys if data['config'].get(key) is not None})
-        # Before Docker 1.9.0, ID's were not digests but random bytes
+        info = {}
         if self._aws_ecr is not None:
             info.update(self._aws_ecr.get_image_info(repo, tag))
         else:
@@ -438,6 +441,11 @@ class DockerRegistryV2:
             # Calculate compressed size
             info['CompressedSize'] = sum((item['size'] for item in manifest['layers']))
         info['Digest'] = info['Digest'].replace('sha256:', '')
+        manifest = self.get_manifest(repo, tag, 1)
+        data = json.loads(manifest['history'][0]['v1Compatibility'])
+        info.update({key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')})
+        keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'Shell', 'User', 'Volumes', 'WorkingDir')
+        info.update({key: data['config'][key] for key in keys if data['config'].get(key) is not None})
         return info
 
     def get_image_history(self, repo, tag):
