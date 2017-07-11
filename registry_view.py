@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.18.4 by Ricardo Branco
+# v1.18.5 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.18.4"
+version = "1.18.5"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -441,7 +441,7 @@ class DockerRegistryV2:
         data = json.loads(manifest['history'][0]['v1Compatibility'])
         info.update({key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')})
         keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'Shell', 'User', 'Volumes', 'WorkingDir')
-        info.update({key: data['config'][key] for key in keys if data['config'].get(key) is not None})
+        info.update({key: data['config'].get(key, "") for key in keys})
         return info
 
     def get_image_history(self, repo, tag):
@@ -507,8 +507,8 @@ def image_info(reg, image):
                 value = " ".join(sorted(value))
             elif value:
                 value = "[ '" + "".join("', '".join(item for item in value)) + "' ]"
-            else:
-                value = ""
+        if value is None or not value:
+            value = ""
         if not PY3:
             value = value.encode('utf-8')
         print('%-15s\t%s' % (key.replace('_', ''), value))
