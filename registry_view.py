@@ -340,7 +340,7 @@ class DockerRegistryV2:
                     self._headers = self._auth_basic()
                 try:
                     data = json.loads(body)
-                except ValueError as err:
+                except ValueError:
                     if http_code == 200:
                         return body
                     else:
