@@ -404,16 +404,20 @@ class DockerRegistryV2:
         """Returns a list of repositories"""
         if self._aws_ecr is not None:
             return self._aws_ecr.get_repositories()
-        data = self._get("_catalog")
-        repositories = data['repositories'] + self._get_paginated('repositories')
+        else:
+            data = self._get("_catalog")
+            repositories = data['repositories'] + self._get_paginated('repositories')
+        repositories.sort()
         return repositories
 
     def get_tags(self, repo):
         """Returns a list of tags for the specified repository"""
         if self._aws_ecr is not None:
             return self._aws_ecr.get_tags(repo)
-        data = self._get(repo + "/tags/list")
-        tags = data['tags'] + self._get_paginated('tags')
+        else:
+            data = self._get(repo + "/tags/list")
+            tags = data['tags'] + self._get_paginated('tags')
+        tags.sort()
         return tags
 
     @Memoize
