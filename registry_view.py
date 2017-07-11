@@ -402,19 +402,17 @@ class DockerRegistryV2:
     def get_repositories(self):
         """Returns a list of repositories"""
         if self._aws_ecr is not None:
-            repositories = self._aws_ecr.get_repositories()
-        else:
-            data = self._get("_catalog")
-            repositories = data['repositories'] + self._get_paginated('repositories')
+            return self._aws_ecr.get_repositories()
+        data = self._get("_catalog")
+        repositories = data['repositories'] + self._get_paginated('repositories')
         return repositories
 
     def get_tags(self, repo):
         """Returns a list of tags for the specified repository"""
         if self._aws_ecr is not None:
-            tags = self._aws_ecr.get_tags(repo)
-        else:
-            data = self._get(repo + "/tags/list")
-            tags = data['tags'] + self._get_paginated('tags')
+            return self._aws_ecr.get_tags(repo)
+        data = self._get(repo + "/tags/list")
+        tags = data['tags'] + self._get_paginated('tags')
         return tags
 
     @Memoize
@@ -422,9 +420,8 @@ class DockerRegistryV2:
         """Returns the image manifest as a dictionary. The schema versions must be 1 or 2"""
         if self._aws_ecr is not None:
             return self._aws_ecr.get_manifest(repo, tag)
-        else:
-            headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)]
-            return self._get(repo + "/manifests/" + tag, headers=headers)
+        headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)]
+        return self._get(repo + "/manifests/" + tag, headers=headers)
 
     def get_image_info(self, repo, tag):
         """Returns a dictionary with image info containing the most interesting items"""
