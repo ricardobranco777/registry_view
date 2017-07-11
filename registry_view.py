@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.18.5 by Ricardo Branco
+# v1.18.6 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.18.5"
+version = "1.18.6"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -116,7 +116,7 @@ class Curl:
                 self.c.setopt(curlopt, opts[opt])
         self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
         if opts['verbose'] is not None and opts['verbose'] > 1:
-             self.c.setopt(pycurl.DEBUGFUNCTION, debug_function)
+            self.c.setopt(pycurl.DEBUGFUNCTION, debug_function)
         self.c.setopt(pycurl.HEADERFUNCTION, self._header_function)
         self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
         self.buf = BytesIO()
@@ -261,6 +261,7 @@ class DockerRegistryV2:
 
     _aws_ecr = None
     _basic_auth = ""
+    _cached_info = {}
     _headers = []
 
     def __init__(self, registry, **args):
@@ -432,16 +433,19 @@ class DockerRegistryV2:
             manifest = self.get_manifest(repo, tag, 2)
             try:
                 info['Digest'] = manifest['config']['digest']
+                if info['Digest'] == self._cached_info['Digest']:
+                    return self._cached_info
             except KeyError:
                 pass
             # Calculate compressed size
             info['CompressedSize'] = sum((item['size'] for item in manifest['layers']))
-        info['Digest'] = info['Digest'].replace('sha256:', '')
+        info['Digest'] = info['Digest']
         manifest = self.get_manifest(repo, tag, 1)
         data = json.loads(manifest['history'][0]['v1Compatibility'])
         info.update({key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')})
         keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'Shell', 'User', 'Volumes', 'WorkingDir')
         info.update({key: data['config'].get(key, "") for key in keys})
+        self._cached_info = info
         return info
 
     def get_image_history(self, repo, tag):
@@ -603,8 +607,10 @@ def main():
         if args.size or args.time:
             continue
         for image in sorted(info, key=lambda k: (info[k]['Created'], k), reverse=not args.reverse):
-            info[image]['Created'] = pretty_date(info[image]['Created'])
-            info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
+            if info[image]['Digest'].startswith("sha256:"):
+                info[image]['Digest'] = info[image]['Digest'].replace('sha256:', '')
+                info[image]['Created'] = pretty_date(info[image]['Created'])
+                info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
             print("%-*s\t%-12s\t%-30s\t%-12s%15s" %
                   (cols, image, info[image]['Digest'][0:12], info[image]['Created'], info[image]['Docker_Version'], info[image]['CompressedSize']))
 
@@ -616,8 +622,10 @@ def main():
         images = sorted(info, key=lambda k: info[k]['Created'], reverse=args.reverse)
 
     for image in images:
-        info[image]['Created'] = pretty_date(info[image]['Created'])
-        info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
+        if info[image]['Digest'].startswith("sha256:"):
+            info[image]['Digest'] = info[image]['Digest'].replace('sha256:', '')
+            info[image]['Created'] = pretty_date(info[image]['Created'])
+            info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
         print("%-*s\t%-12s\t%-30s\t%-12s%15s" %
               (cols, image, info[image]['Digest'][0:12], info[image]['Created'], info[image]['Docker_Version'], info[image]['CompressedSize']))
 
