@@ -69,16 +69,19 @@ Note: Default PORT is 443. You must prepend "http://" to REGISTRY if running on 
 
 os.environ['LC_ALL'] = 'C.UTF-8'
 
+
 class Memoize(object):
     """Decorator for methods and functions to memorize the last recently used call"""
     def __init__(self, func):
         self.func = func
         self.cache = {}
+
     def __call__(self, *args):
         if args not in self.cache:
             self.cache = {}
             self.cache[args] = self.func(*args)
         return self.cache[args]
+
     def __get__(self, obj, objtype):
         return partial(self, obj)
 
@@ -89,7 +92,7 @@ def debug_function(t, m):
                    pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
                    pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: ''}
     # Ignore SSL info types
-    if curl_prefix.get(t) is None:
+    if t not in curl_prefix:
         return
     m = m.decode('iso-8859-1').rstrip()
     if t == pycurl.INFOTYPE_HEADER_OUT:
@@ -330,7 +333,7 @@ class DockerRegistryV2:
                     data = json.loads(body)
                 except ValueError:
                     return body
-                if data.get('errors') is not None:
+                if 'errors' in data:
                     raise DockerRegistryError(data['errors'][0]['message'])
                 else:
                     return data
@@ -345,8 +348,7 @@ class DockerRegistryV2:
         if http_code == 404:
             error = 'Invalid v2 Docker Registry: ' + self._registry
         else:
-            error = self._c.get_headers('HTTP_STATUS')
-            if error is not None and not error:
+            if not self._c.get_headers('HTTP_STATUS'):
                 error = "Invalid HTTP server"
         print('ERROR: ' + error, file=sys.stderr)
         sys.exit(1)
