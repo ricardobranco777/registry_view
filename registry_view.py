@@ -443,7 +443,6 @@ class DockerRegistryV2:
                 pass
             # Calculate compressed size
             info['CompressedSize'] = sum((item['size'] for item in manifest['layers']))
-        info['Digest'] = info['Digest']
         manifest = self.get_manifest(repo, tag, 1)
         data = json.loads(manifest['history'][0]['v1Compatibility'])
         info.update({key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')})
