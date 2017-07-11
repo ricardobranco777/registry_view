@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.18.6 by Ricardo Branco
+# v1.19 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.18.6"
+version = "1.19"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -206,9 +206,11 @@ class DockerRegistryECR:
         """Gets the boto3 handle"""
         try:
             import boto3
+            from botocore.exceptions import BotoCoreError, ClientError
         except ImportError:
             print("ERROR: Install the boto3 Python library to get data from AWS ECR", file=sys.stderr)
             sys.exit(1)
+        self.BotoCoreError, self.ClientError = BotoCoreError, ClientError
         self._c = boto3.client('ecr')
         self._registryId = re.findall(r"^(?:https?://)?([0-9]{12})\.*", registry)[0]
 
@@ -216,8 +218,11 @@ class DockerRegistryECR:
         """Returns a list of repositories"""
         repositories = []
         paginator = self._c.get_paginator('describe_repositories')
-        for response in paginator.paginate(registryId=self._registryId):
-            repositories += [item['repositoryName'] for item in response['repositories']]
+        try:
+            for response in paginator.paginate(registryId=self._registryId):
+                repositories += [item['repositoryName'] for item in response['repositories']]
+        except (self.BotoCoreError, self.ClientError) as e:
+            print("ERROR: " + str(e), file=sys.stderr)
         return repositories
 
     def get_tags(self, repo):
@@ -240,7 +245,10 @@ class DockerRegistryECR:
             return self._cache[repo][tag]
         except KeyError:
             pass
-        data = self._c.describe_images(registryId=self._registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
+        try:
+            data = self._c.describe_images(registryId=self._registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
+        except (self.BotoCoreError, self.ClientError) as e:
+            raise DockerRegistryError(e)
         data = data['imageDetails'][0]
         keys = (('Digest', 'imageDigest'), ('CompressedSize', 'imageSizeInBytes'))
         return {k1: data[k2] for (k1, k2) in keys}
@@ -332,8 +340,11 @@ class DockerRegistryV2:
                     self._headers = self._auth_basic()
                 try:
                     data = json.loads(body)
-                except ValueError:
-                    return body
+                except ValueError as err:
+                    if http_code == 200:
+                        return body
+                    else:
+                        raise DockerRegistryError(body.strip())
                 if 'errors' in data:
                     raise DockerRegistryError(data['errors'][0]['message'])
                 else:
