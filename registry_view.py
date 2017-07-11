@@ -420,10 +420,7 @@ class DockerRegistryV2:
     @Memoize
     def get_manifest(self, repo, tag, version):
         """Returns the image manifest as a dictionary. The schema versions must be 1 or 2"""
-        assert version in (1, 2)
-        image = repo + ":" + tag
         if self._aws_ecr is not None:
-            assert version == 1
             return self._aws_ecr.get_manifest(repo, tag)
         else:
             headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)]
@@ -531,7 +528,7 @@ def image_info(reg, image):
     for i, layer in enumerate(history, 1):
         # The format of the SHELL command in the manifest is:
         # "/bin/bash -c #(nop)  SHELL [/bin/bash -c]" when 'SHELL ["/bin/bash", "-c"]' is used in the Dockerfile
-        m = re.match("(.*) #\(nop\)  SHELL \[(.*)\]$", layer)
+        m = re.match(r"(.*) #\(nop\)  SHELL \[(.*)\]$", layer)
         if m and len(m.groups()) == 2 and m.group(1) == m.group(2):
             shell = m.group(1)
         layer = re.sub('^' + shell + r' #\(nop\)', "", layer)
