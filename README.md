@@ -19,3 +19,6 @@ Options:
 
 Note: Default port is 443. You must specify "http://..." if running on plain HTTP.
 
+# Docker image
+
+[ricardobranco/registry_view](https://hub.docker.com/r/ricardobranco/registry_view/)
