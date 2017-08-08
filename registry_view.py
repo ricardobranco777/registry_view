@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.19 by Ricardo Branco
+# v1.19.1 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.19"
+version = "1.19.1"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -524,7 +524,7 @@ def image_info(reg, image):
             else:
                 value = list(value)
         if isinstance(value, list):
-            if key in ('Env', 'ExposedPorts'):
+            if key in ('Env', 'ExposedPorts', 'Volumes'):
                 value = " ".join(sorted(value))
             elif value:
                 value = "[ '" + "".join("', '".join(item for item in value)) + "' ]"
