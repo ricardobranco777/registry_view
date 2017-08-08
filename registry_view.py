@@ -212,7 +212,7 @@ class DockerRegistryECR:
             sys.exit(1)
         self.BotoCoreError, self.ClientError = BotoCoreError, ClientError
         self._c = boto3.client('ecr')
-        self._registryId = re.findall(r"^(?:https?://)?([0-9]{12})\.*", registry)[0]
+        self._registryId = re.findall(r"^(?:https?://)?(.*?)\.", registry)[0]
 
     def get_repositories(self):
         """Returns a list of repositories"""
@@ -282,7 +282,7 @@ class DockerRegistryV2:
         if not re.match("https?://", self._registry):
             self._registry = "https://" + self._registry
         # Check for AWS EC2 Container Registry
-        if re.match(r"(?:https?://)?[0-9]{12}\.dkr\.ecr\.[a-z0-9]+[a-z0-9-]*\.amazonaws\.com(?::[0-9]+)?$", self._registry):
+        if re.match(r"(?:https?://)?.*?\.dkr\.ecr\..*?\.amazonaws\.com(?::[0-9]+)?$", self._registry):
             self._aws_ecr = DockerRegistryECR(self._registry)
             return
         # Set credentials if specified or set in ~/.docker/config.json
