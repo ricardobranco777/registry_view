@@ -216,11 +216,13 @@ class DockerRegistryECR:
 
     def get_repositories(self):
         """Returns a list of repositories"""
-        repositories = []
         paginator = self._c.get_paginator('describe_repositories')
         try:
-            for response in paginator.paginate(registryId=self._registryId):
-                repositories += [item['repositoryName'] for item in response['repositories']]
+            repositories = [
+                item['repositoryName']
+                for response in paginator.paginate(registryId=self._registryId)
+                for item in response['repositories']
+            ]
         except (self.BotoCoreError, self.ClientError) as e:
             print("ERROR: " + str(e), file=sys.stderr)
         return repositories
@@ -464,10 +466,11 @@ class DockerRegistryV2:
 
     def get_image_history(self, repo, tag):
         """Returns a list containing the image history (layers)"""
-        history = []
         manifest = self.get_manifest(repo, tag, 1)
-        for item in reversed(manifest['history']):
-            history += [" ".join(json.loads(item['v1Compatibility'])['container_config']['Cmd'])]
+        history = [
+            " ".join(json.loads(item['v1Compatibility'])['container_config']['Cmd'])
+            for item in reversed(manifest['history'])
+        ]
         return history
 
 
