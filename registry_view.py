@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.19.1 by Ricardo Branco
+# v1.20 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.19.1"
+version = "1.20"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -551,6 +551,21 @@ def image_info(reg, image):
             shell = m.group(1)
         layer = re.sub('^' + shell + r' #\(nop\)', "", layer)
         layer = re.sub('^' + shell, "RUN", layer).lstrip()
+        if layer.startswith('HEALTHCHECK &{["CMD-SHELL" '):
+            cmd, interval, timeout, start, retries = re.findall(r'^HEALTHCHECK &{\["CMD-SHELL" "(.*?)"] "(.*?)" "(.*?)" "(.*?)" \'\\x(.*)\'}$', layer)[0]
+            retries = str(int(retries, base=16))
+            layer = "HEALTHCHECK"
+            if interval != "0s":
+                layer += " --interval=" + interval
+            if timeout != "0s":
+                layer += " --timeout=" + timeout
+            if start != "0s":
+                layer += " --start-period=" + start
+            if retries != "0":
+                layer += " --retries=" + retries
+            layer += " CMD " + cmd
+        elif layer.startswith('HEALTHCHECK &{["NONE"] "'):
+            layer = "HEALTHCHECK NONE"
         if not PY3:
             layer = layer.encode('utf-8')
         print('%-15s\t%s' % ('History[' + str(i) + ']', layer))
