@@ -438,7 +438,7 @@ class DockerRegistryV2:
         """Returns the image manifest as a dictionary. The schema versions must be 1 or 2"""
         if self._aws_ecr is not None:
             return self._aws_ecr.get_manifest(repo, tag)
-        headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % (version)]
+        headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % version]
         return self._get(repo + "/manifests/" + tag, headers=headers)
 
     def get_image_info(self, repo, tag):
@@ -481,7 +481,7 @@ def pretty_size(size):
     units = (' ', 'K', 'M', 'G', 'T')
     for n in range(4, -1, -1):
         if size > 1024**n:
-            return "%.2f %cB" % ((float(size) / 1024**n), units[n])
+            return "%.2f %cB" % (float(size) / 1024**n, units[n])
 
 
 # Converts date/time string in ISO-8601 format to date(1)
@@ -493,7 +493,7 @@ def pretty_date(ts):
 # Print image info
 def image_info(reg, image):
     def registry_error(error):
-        print("ERROR: %s: %s" % ((image), error), file=sys.stderr)
+        print("ERROR: %s: %s" % (image, error), file=sys.stderr)
         sys.exit(1)
 
     if ':' in image:
