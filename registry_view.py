@@ -78,8 +78,7 @@ class Memoize(object):
 
     def __call__(self, *args):
         if args not in self.cache:
-            self.cache = {}
-            self.cache[args] = self.func(*args)
+            self.cache = dict(args = self.func(*args))
         return self.cache[args]
 
     def __get__(self, obj, objtype):
@@ -378,27 +377,12 @@ class DockerRegistryV2:
                 config_file = os.path.expanduser(os.path.join("~", ".dockercfg"))
         if not os.path.exists(config_file):
             return
-        auth = ""
         with open(os.path.expanduser(config_file), "r") as f:
             config = json.load(f)
-        try_registry = [re.sub("^https?://", "", self._registry)]
-        if not re.search(':[0-9]+$', try_registry[0]):
-            if self._registry.startswith('https://'):
-                try_registry += [try_registry[0] + ':443']
-            elif self._registry.startswith('http://'):
-                try_registry += [try_registry[0] + ':80']
-        else:
-            if self._registry.startswith('https://'):
-                try_registry += [try_registry[0][:-len(':443')]]
-            elif self._registry.startswith('http://'):
-                try_registry += [try_registry[0][:-len(':80')]]
-        for registry in try_registry:
-            try:
-                auth = config['auths'][registry]['auth']
-                if auth:
-                    break
-            except KeyError:
-                pass
+        try:
+            auth = config['auths'][re.sub("^https?://", "", self._registry)]['auth']
+        except KeyError:
+            pass
         return auth
 
     def _get_paginated(self, s):
