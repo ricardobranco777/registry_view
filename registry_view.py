@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.20.1 by Ricardo Branco
+# v1.20.2 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.20.1"
+version = "1.20.2"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -477,6 +477,44 @@ def pretty_date(ts):
     return strftime(fmt, localtime(timegm(strptime(re.sub(r"\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))))
 
 
+# Converts nanoseconds into a string that can be parsed by Go's time.ParseDuration()
+def pretty_time(nanoseconds):
+    microseconds_ns = 1e3
+    milliseconds_ns = 1e3 * microseconds_ns
+    seconds_ns = 1e3 *milliseconds_ns
+    minutes_ns = 60 * seconds_ns
+    hours_ns = 60 * minutes_ns
+
+    nanoseconds = int(nanoseconds)
+    if not nanoseconds:
+        return "0"
+    time_string = ""
+    hours = int(nanoseconds / hours_ns)
+    if hours:
+        time_string += "%dh" % hours
+        nanoseconds -= hours * hours_ns
+    minutes = int(nanoseconds / minutes_ns)
+    if minutes:
+        time_string += "%dm" % minutes
+        nanoseconds -= minutes * minutes_ns
+    seconds = int(nanoseconds / seconds_ns)
+    if seconds:
+        time_string += "%dm" % seconds
+        nanoseconds -= seconds * seconds_ns
+    milliseconds = int(nanoseconds / milliseconds_ns)
+    if milliseconds:
+        time_string += "%dms" % milliseconds
+        nanoseconds -= milliseconds * milliseconds_ns
+    microseconds = int(nanoseconds / microseconds_ns)
+    if microseconds:
+        time_string += "%dus" % microseconds
+        nanoseconds -= microseconds * microseconds_ns
+    if nanoseconds:
+        time_string += "%dns" % nanoseconds
+
+    return time_string
+
+
 # Print image info
 def image_info(reg, image):
     def registry_error(error):
@@ -503,11 +541,19 @@ def image_info(reg, image):
     for key in sorted(keys):
         value = info[key]
         if isinstance(value, dict):
-            if key == "Labels" or key == "Healthcheck":
+            if key == "Labels":
                 if value:
                     value = str(json.dumps(value))
                 else:
                     value = ""
+            elif key == "Healthcheck":
+                value = ""
+                for k in ('Interval', 'Timeout', 'StartPeriod'):
+                    if info[key][k]:
+                        value += "%s=%s " % (k, pretty_time(info[key][k]))
+                if info[key]['Retries']:
+                    value += "Retries=%d " % info[key]['Retries']
+                value += "Command=" + info[key]['Test'][1]
             else:
                 value = list(value)
         if isinstance(value, list):
