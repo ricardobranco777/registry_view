@@ -78,7 +78,8 @@ class Memoize(object):
 
     def __call__(self, *args):
         if args not in self.cache:
-            self.cache = dict(args = self.func(*args))
+            self.cache = {}
+            self.cache[args] = self.func(*args)
         return self.cache[args]
 
     def __get__(self, obj, objtype):
@@ -377,6 +378,7 @@ class DockerRegistryV2:
                 config_file = os.path.expanduser(os.path.join("~", ".dockercfg"))
         if not os.path.exists(config_file):
             return
+        auth = ""
         with open(os.path.expanduser(config_file), "r") as f:
             config = json.load(f)
         try:
