@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.20 by Ricardo Branco
+# v1.20.1 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.20"
+version = "1.20.1"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -445,7 +445,8 @@ class DockerRegistryV2:
         manifest = self.get_manifest(repo, tag, 1)
         data = json.loads(manifest['history'][0]['v1Compatibility'])
         info.update({key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')})
-        keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels', 'OnBuild', 'Shell', 'User', 'Volumes', 'WorkingDir')
+        keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels',
+                'OnBuild', 'Shell', 'StopSignal', 'User', 'Volumes', 'WorkingDir')
         info.update({key: data['config'].get(key, "") for key in keys})
         self._cached_info = info
         return info
