@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.20.2 by Ricardo Branco
+# v1.20.3 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.20.2"
+version = "1.20.3"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -114,7 +114,7 @@ class Curl:
         for opt, curlopt in curlopts:
             if opts[opt] is not None:
                 self.c.setopt(curlopt, opts[opt])
-        self.c.setopt(pycurl.SSL_VERIFYPEER, 0)
+        self.c.setopt(pycurl.SSL_VERIFYPEER, 1)
         if opts['verbose'] is not None and opts['verbose'] > 1:
             self.c.setopt(pycurl.DEBUGFUNCTION, debug_function)
         self.c.setopt(pycurl.HEADERFUNCTION, self._header_function)
@@ -378,14 +378,12 @@ class DockerRegistryV2:
                 config_file = os.path.expanduser(os.path.join("~", ".dockercfg"))
         if not os.path.exists(config_file):
             return
-        auth = ""
         with open(os.path.expanduser(config_file), "r") as f:
             config = json.load(f)
         try:
-            auth = config['auths'][re.sub("^https?://", "", self._registry)]['auth']
+            return config['auths'][re.sub("^https?://", "", self._registry)]['auth']
         except KeyError:
             pass
-        return auth
 
     def _get_paginated(self, s):
         """Get paginated results when the Registry is too large"""
