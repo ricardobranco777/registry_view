@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.20.3 by Ricardo Branco
+# v1.20.4 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.20.3"
+version = "1.20.4"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -225,6 +225,7 @@ class DockerRegistryECR:
             ]
         except (self.BotoCoreError, self.ClientError) as e:
             print("ERROR: " + str(e), file=sys.stderr)
+            sys.exit(1)
         return repositories
 
     def get_tags(self, repo):
