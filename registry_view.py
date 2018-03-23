@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.20.4 by Ricardo Branco
+# v1.20.5 by Ricardo Branco
 #
 # MIT License
 
@@ -50,9 +50,9 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.20.4"
+version = "1.20.5"
 
-usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
+usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG][\*]]
 Options:
         -c, --cert CERT         Client certificate file name
         -k, --key  KEY          Client private key file name
@@ -638,7 +638,7 @@ def main():
     reg = DockerRegistryV2(registry, **vars(args))
 
     # Print information for a specific image
-    if args.image:
+    if args.image and not args.image.endswith('*'):
         image_info(reg, args.image)
         sys.exit(0)
 
@@ -655,6 +655,8 @@ def main():
     info = {}
 
     for repo in reg.get_repositories():
+        if args.image and not repo.startswith(args.image.split(':', 1)[0].rstrip('*')):
+            continue
         try:
             tags = reg.get_tags(repo)
         except DockerRegistryError as error:
@@ -663,6 +665,8 @@ def main():
         if not (args.size or args.time):
             info = {}
         for tag in tags:
+            if ':' in args.image and not tag.startswith(args.image.split(':', 1)[1].rstrip('*')):
+                continue
             try:
                 info[repo + ":" + tag] = reg.get_image_info(repo, tag)
             except DockerRegistryError as error:
