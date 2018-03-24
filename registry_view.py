@@ -52,7 +52,7 @@ else:
 progname = os.path.basename(sys.argv[0])
 version = "1.20.5"
 
-usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG][\*]]
+usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
         -c, --cert CERT         Client certificate file name
         -k, --key  KEY          Client private key file name
@@ -326,8 +326,10 @@ class DockerRegistryV2:
             body = self._c.get(self._registry + "/v2/" + url, self._headers + headers)
             http_code = self._c.get_http_code()
             if http_code == 429:    # Too many requests
-                sleep(0.1)
-                continue
+                sleep_time = self._c.get_headers('retry-after')
+                if sleep_time.isdigit():
+                    time.sleep(int(sleep_time))
+                    continue
             elif http_code == 401 and tries > 0:
                 headers = headers[:]
                 auth_method = self._c.get_headers('www-authenticate')
