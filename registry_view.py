@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.20.5 by Ricardo Branco
+# v1.20.6 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.20.5"
+version = "1.20.6"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -256,9 +256,12 @@ class DockerRegistryECR:
         keys = (('Digest', 'imageDigest'), ('CompressedSize', 'imageSizeInBytes'))
         return {k1: data[k2] for (k1, k2) in keys}
 
-    def get_manifest(self, repo, tag):
+    def get_manifest(self, repo, tag, version):
         """Returns the image manifest as a dictionary"""
-        data = self._c.batch_get_image(registryId=self._registryId, repositoryName=repo, imageIds=[{'imageTag': tag}])
+        data = self._c.batch_get_image(
+            registryId=self._registryId, repositoryName=repo, imageIds=[{'imageTag': tag}],
+            acceptedMediaTypes=["application/vnd.docker.distribution.manifest.v%d+json" % version]
+        )
         return json.loads(data['images'][0]['imageManifest'])
 
 
@@ -424,7 +427,7 @@ class DockerRegistryV2:
     def get_manifest(self, repo, tag, version):
         """Returns the image manifest as a dictionary. The schema versions must be 1 or 2"""
         if self._aws_ecr is not None:
-            return self._aws_ecr.get_manifest(repo, tag)
+            return self._aws_ecr.get_manifest(repo, tag, version)
         headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % version]
         return self._get(repo + "/manifests/" + tag, headers=headers)
 
