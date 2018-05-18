@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.20.6 by Ricardo Branco
+# v1.20.7 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.20.6"
+version = "1.20.7"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -314,8 +314,13 @@ class DockerRegistryV2:
         del fields['Bearer realm']
         fields = urlencode(fields)
         if use_post:
-            token = json.loads(self._c.post(url, fields, auth=self._auth_basic()))['token']
-        else:
+            try:
+                token = json.loads(self._c.post(url, fields, auth=self._auth_basic()))['token']
+            except KeyError:
+                pass
+            if self._c.get_http_code() == 405:
+                use_post = False
+        if not use_post:
             url += '?' + fields
             token = json.loads(self._c.get(url, auth=self._auth_basic()))['token']
         return ['Authorization: Bearer ' + token]
