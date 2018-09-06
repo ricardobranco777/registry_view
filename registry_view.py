@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.20.7 by Ricardo Branco
+# v1.20.8 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.20.7"
+version = "1.20.8"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -660,7 +660,7 @@ def main():
         columns = int(subprocess.check_output(['/bin/stty', 'size']).split()[1])
     cols = int(columns / 3)
 
-    print("%-*s\t%-12s\t%-30s\t%-12s%s" % (cols, "Image", "Id", "Created on", "Docker", "Compressed Size"))
+    print("%-*s\t%-12s\t%-30s\t%s" % (cols, "Image", "Id", "Created on", "Compressed Size"))
 
     info = {}
 
@@ -689,8 +689,8 @@ def main():
                 info[image]['Digest'] = info[image]['Digest'].replace('sha256:', '')
                 info[image]['Created'] = pretty_date(info[image]['Created'])
                 info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
-            print("%-*s\t%-12s\t%-30s\t%-12s%15s" %
-                  (cols, image, info[image]['Digest'][0:12], info[image]['Created'], info[image]['Docker_Version'], info[image]['CompressedSize']))
+            print("%-*s\t%-12s\t%-30s\t%15s" %
+                  (cols, image, info[image]['Digest'][0:12], info[image]['Created'], info[image]['CompressedSize']))
 
     # Show output sorted by size or time
     images = []
@@ -705,7 +705,7 @@ def main():
             info[image]['Created'] = pretty_date(info[image]['Created'])
             info[image]['CompressedSize'] = pretty_size(info[image].get('CompressedSize'))
         print("%-*s\t%-12s\t%-30s\t%-12s%15s" %
-              (cols, image, info[image]['Digest'][0:12], info[image]['Created'], info[image]['Docker_Version'], info[image]['CompressedSize']))
+              (cols, image, info[image]['Digest'][0:12], info[image]['Created'], info[image]['CompressedSize']))
 
 
 if __name__ == "__main__":
