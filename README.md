@@ -1,7 +1,7 @@
 # registry_view.py
 Script to visualize the contents of a Docker Registry v2 using PyCurl
 
-Additional support for AWS EC2 Container Registry with Boto3 (pip install boto3)
+Additional support for AWS EC2 Container Registry with Boto3 (pip3 install boto3)
 See https://github.com/boto/boto3 for configuration details
 
 Usage: registry_view.py [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG][\*]]

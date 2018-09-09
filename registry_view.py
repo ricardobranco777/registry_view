@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Script to visualize the contents of a Docker Registry v2 using the API with PyCurl
 #
@@ -7,11 +7,9 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.23 by Ricardo Branco
+# v1.24 by Ricardo Branco
 #
 # MIT License
-
-from __future__ import print_function
 
 import argparse
 import base64
@@ -24,6 +22,9 @@ from calendar import timegm
 from time import localtime, sleep, strptime, strftime
 from getpass import getpass
 from functools import partial
+from urllib.parse import urlencode
+from io import BytesIO
+import shutil
 
 try:
     import pycurl
@@ -31,26 +32,8 @@ except ImportError:
     print('ERROR: Please install PyCurl', file=sys.stderr)
     sys.exit(1)
 
-try:
-    from urllib.parse import urlencode
-except ImportError:
-    from urllib import urlencode
-
-try:
-    from io import BytesIO
-except ImportError:
-    from StringIO import StringIO as BytesIO
-
-PY3 = sys.version_info[0] == 3
-
-if PY3:
-    import shutil
-else:
-    import subprocess
-    input = raw_input
-
 progname = os.path.basename(sys.argv[0])
-version = "1.23"
+version = "1.24"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -575,8 +558,6 @@ def print_image_info(reg, repo, tag, info):
                 value = "[ '" + "".join("', '".join(item for item in value)) + "' ]"
         if value is None or not value:
             value = ""
-        if not PY3:
-            value = value.encode('utf-8')
         print('%-15s\t%s' % (key.replace('_', ''), value))
 
     # Print image history
@@ -611,8 +592,6 @@ def print_image_info(reg, repo, tag, info):
             layer += " CMD " + cmd
         elif layer.startswith('HEALTHCHECK &{["NONE"] "'):
             layer = "HEALTHCHECK NONE"
-        if not PY3:
-            layer = layer.encode('utf-8')
         print('%-15s\t%s' % ('History[' + str(i) + ']', layer))
 
 
@@ -693,10 +672,7 @@ def main():
 
     # Print information on all images
 
-    try:     # Python 3
-        columns = shutil.get_terminal_size(fallback=(158, 40)).columns
-    except NameError:  # Unix only
-        columns = int(subprocess.check_output(['/bin/stty', 'size']).split()[1])
+    columns = shutil.get_terminal_size(fallback=(158, 40)).columns
     global cols
     cols = int(columns / 2)
 
