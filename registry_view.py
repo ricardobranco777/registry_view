@@ -654,7 +654,9 @@ def main():
 
     reg = DockerRegistryV2(registry, **vars(args))
 
+    #
     # Print information for a specific image
+    #
     if args.image and not args.image.endswith('*'):
         tag = digest = None
         if '@' in args.image:
@@ -673,25 +675,26 @@ def main():
             print_image_info(reg, repo, tag, info[i])
         sys.exit(0)
 
+    #
     # Print information on all images
-
-    columns = shutil.get_terminal_size(fallback=(158, 40)).columns
-    global cols
-    cols = int(columns / 2)
+    #
 
     if args.no_trunc:
         image_id_size = 15
     else:
         image_id_size = 75
 
+    info = {}
+    repos = reg.get_repositories()
+    global cols
+    cols = len(max(repos, key=lambda k: len(k))) + 10
+
     if args.digests:
         print("%-*s %-75s%-*s%-30s %-15s %s" % (cols, "Image", "Digest", image_id_size, "Id", "Created on", "Compressed Size", "Platform"))
     else:
         print("%-*s %-*s%-30s %-15s %s" % (cols, "Image", image_id_size, "Id", "Created on", "Compressed Size", "Platform"))
 
-    info = {}
-
-    for repo in reg.get_repositories():
+    for repo in repos:
         if args.image and not repo.startswith(args.image.split(':', 1)[0].rstrip('*')):
             continue
         try:
