@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.21 by Ricardo Branco
+# v1.22 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.21"
+version = "1.22"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -616,21 +616,27 @@ def print_image_info(reg, repo, tag, info):
 
 
 def print_info(info):
-    image_id = info['Id'].replace("sha256:", "")[0:12]
+    image_id = info['Id']
+    if args.no_trunc:
+        image_id = image_id.replace("sha256:", "")[0:12]
+        image_id_size = 15
+    else:
+        image_id_size = 75
     created = info.get('Created')
     created = pretty_date(created) if created else "-"
     size = info.get('CompressedSize')
     size = pretty_size(size) if size else "-"
-    print("%-*s %-15s %-30s %-15s %s/%s" % (cols, info['Repo'] + ":" + info['Tag'], image_id, created, size, info['Os'], info['Architecture']))
+    print("%-*s %-*s %-30s %-15s %s/%s" % (cols, info['Repo'] + ":" + info['Tag'], image_id_size, image_id, created, size, info['Os'], info['Architecture']))
 
 
 def main():
     parser = argparse.ArgumentParser(usage=usage, add_help=False)
-    # TODO: --no-trunc / --digests
+    # TODO: --digests
     parser.add_argument('-c', '--cert')
     parser.add_argument('-k', '--key')
     parser.add_argument('-p', '--pass')
     parser.add_argument('-u', '--user')
+    parser.add_argument('--no-trunc', action='store_false')
     parser.add_argument('-r', '--reverse', action='store_false')
     parser.add_argument('-s', '--size', action='store_true')
     parser.add_argument('-t', '--time', action='store_true')
@@ -638,6 +644,7 @@ def main():
     parser.add_argument('-v', '--verbose', action='count')
     parser.add_argument('-V', '--version', action='store_true')
     parser.add_argument('image', nargs='?')
+    global args
     args = parser.parse_args()
 
     if args.help:
@@ -687,7 +694,12 @@ def main():
     global cols
     cols = int(columns / 2)
 
-    print("%-*s %-15s %-30s %-15s %s" % (cols, "Image", "Id", "Created on", "Compressed Size", "Platform"))
+    if args.no_trunc:
+        image_id_size = 15
+    else:
+        image_id_size = 75
+
+    print("%-*s %-*s %-30s %-15s %s" % (cols, "Image", image_id_size, "Id", "Created on", "Compressed Size", "Platform"))
 
     info = {}
 
@@ -722,6 +734,7 @@ def main():
             print_info(info[image])
 
     # Show output sorted by size or time
+    # TODO: Recalculate cols
     images = []
     if args.size:
         images = sorted(info, key=lambda k: info[k].get('CompressedSize', 0), reverse=args.reverse)
