@@ -524,6 +524,38 @@ def registry_error(error):
     sys.exit(1)
 
 
+# Print image history
+def print_history(history, os):
+    if os == "windows":
+        shell = 'cmd /S /C'
+    else:
+        shell = '/bin/sh -c'
+    for i, layer in enumerate(history, 1):
+        # The format of the SHELL command in the manifest is:
+        # "/bin/bash -c #(nop)  SHELL [/bin/bash -c]" when 'SHELL ["/bin/bash", "-c"]' is used in the Dockerfile
+        m = re.match(r"(.*) #\(nop\)  SHELL \[(.*)\]$", layer)
+        if m and len(m.groups()) == 2 and m.group(1) == m.group(2):
+            shell = m.group(1)
+        layer = re.sub('^' + shell + r' #\(nop\)', "", layer)
+        layer = re.sub('^' + shell, "RUN", layer).lstrip()
+        if layer.startswith('HEALTHCHECK &{["CMD-SHELL" '):
+            cmd, interval, timeout, start, retries = re.findall(r'^HEALTHCHECK &{\["CMD-SHELL" "(.*?)"] "(.*?)" "(.*?)" "(.*?)" \'\\x(.*)\'}$', layer)[0]
+            retries = str(int(retries, base=16))
+            layer = "HEALTHCHECK"
+            if interval != "0s":
+                layer += " --interval=" + interval
+            if timeout != "0s":
+                layer += " --timeout=" + timeout
+            if start != "0s":
+                layer += " --start-period=" + start
+            if retries != "0":
+                layer += " --retries=" + retries
+            layer += " CMD " + cmd
+        elif layer.startswith('HEALTHCHECK &{["NONE"] "'):
+            layer = "HEALTHCHECK NONE"
+        print('%-15s\t%s' % ('History[' + str(i) + ']', layer))
+
+
 # Print image info
 def print_image_info(reg, repo, tag, info):
     if 'Env' in info:
@@ -563,34 +595,7 @@ def print_image_info(reg, repo, tag, info):
         history = reg.get_image_history(repo, tag, info['Digest'])
     except DockerRegistryError as error:
         registry_error(error)
-    if info['Os'] == "windows":
-        shell = 'cmd /S /C'
-    else:
-        shell = '/bin/sh -c'
-    for i, layer in enumerate(history, 1):
-        # The format of the SHELL command in the manifest is:
-        # "/bin/bash -c #(nop)  SHELL [/bin/bash -c]" when 'SHELL ["/bin/bash", "-c"]' is used in the Dockerfile
-        m = re.match(r"(.*) #\(nop\)  SHELL \[(.*)\]$", layer)
-        if m and len(m.groups()) == 2 and m.group(1) == m.group(2):
-            shell = m.group(1)
-        layer = re.sub('^' + shell + r' #\(nop\)', "", layer)
-        layer = re.sub('^' + shell, "RUN", layer).lstrip()
-        if layer.startswith('HEALTHCHECK &{["CMD-SHELL" '):
-            cmd, interval, timeout, start, retries = re.findall(r'^HEALTHCHECK &{\["CMD-SHELL" "(.*?)"] "(.*?)" "(.*?)" "(.*?)" \'\\x(.*)\'}$', layer)[0]
-            retries = str(int(retries, base=16))
-            layer = "HEALTHCHECK"
-            if interval != "0s":
-                layer += " --interval=" + interval
-            if timeout != "0s":
-                layer += " --timeout=" + timeout
-            if start != "0s":
-                layer += " --start-period=" + start
-            if retries != "0":
-                layer += " --retries=" + retries
-            layer += " CMD " + cmd
-        elif layer.startswith('HEALTHCHECK &{["NONE"] "'):
-            layer = "HEALTHCHECK NONE"
-        print('%-15s\t%s' % ('History[' + str(i) + ']', layer))
+    print_history(history, info['Os'])
 
 
 def print_info(info):
