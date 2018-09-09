@@ -687,7 +687,7 @@ def main():
     info = {}
     repos = reg.get_repositories()
     global cols
-    cols = len(max(repos, key=lambda k: len(k))) + 10
+    cols = len(max(repos, key=lambda k: len(k))) + 15
 
     if args.digests:
         print("%-*s %-75s%-*s%-30s %-15s %s" % (cols, "Image", "Digest", image_id_size, "Id", "Created on", "Compressed Size", "Platform"))
