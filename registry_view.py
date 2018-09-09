@@ -64,8 +64,6 @@ def debug_function(t, m):
     if t not in curl_prefix:
         return
     m = m.decode('iso-8859-1').rstrip()
-    if t == pycurl.INFOTYPE_HEADER_OUT:
-        m = m.replace(r'\n', r'\n' + curl_prefix[t])
     print(curl_prefix[t] + m)
 
 
