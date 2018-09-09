@@ -58,6 +58,7 @@ Options:
         -k, --key  KEY          Client private key file name
         -p, --pass PASS         Pass phrase for the private key
         -u, --user USER[:PASS]  Server user and password (for HTTP Basic authentication)
+        --no-trunc              Don't truncate output
         -r, --reverse           Reverse order with the -s & -t options
         -s, --size              Sort images by size with the largest ones coming first
         -t, --time              Sort images by time with the newest ones coming first
