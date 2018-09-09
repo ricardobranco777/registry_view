@@ -725,7 +725,6 @@ def main():
             print_info(info[image])
 
     # Show output sorted by size or time
-    # TODO: Recalculate cols
     images = []
     if args.size:
         images = sorted(info, key=lambda k: info[k].get('CompressedSize', 0), reverse=args.reverse)
