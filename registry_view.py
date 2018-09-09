@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.22 by Ricardo Branco
+# v1.23 by Ricardo Branco
 #
 # MIT License
 
@@ -50,7 +50,7 @@ else:
     input = raw_input
 
 progname = os.path.basename(sys.argv[0])
-version = "1.22"
+version = "1.23"
 
 usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -58,6 +58,7 @@ Options:
         -k, --key  KEY          Client private key file name
         -p, --pass PASS         Pass phrase for the private key
         -u, --user USER[:PASS]  Server user and password (for HTTP Basic authentication)
+        --digests               Show digests
         --no-trunc              Don't truncate output
         -r, --reverse           Reverse order with the -s & -t options
         -s, --size              Sort images by size with the largest ones coming first
@@ -583,7 +584,6 @@ def print_image_info(reg, repo, tag, info):
         history = reg.get_image_history(repo, tag, info['Digest'])
     except DockerRegistryError as error:
         registry_error(error)
-    # XXX
     if info['Os'] == "windows":
         shell = 'cmd /S /C'
     else:
@@ -627,16 +627,21 @@ def print_info(info):
     created = pretty_date(created) if created else "-"
     size = info.get('CompressedSize')
     size = pretty_size(size) if size else "-"
-    print("%-*s %-*s %-30s %-15s %s/%s" % (cols, info['Repo'] + ":" + info['Tag'], image_id_size, image_id, created, size, info['Os'], info['Architecture']))
+    if args.digests:
+        print("%-*s %-75s%-*s%-30s %-15s %s/%s" % (cols, info['Repo'] + ":" + info['Tag'], info['Digest'],
+            image_id_size, image_id, created, size, info['Os'], info['Architecture']))
+    else:
+        print("%-*s %-*s%-30s %-15s %s/%s" % (cols, info['Repo'] + ":" + info['Tag'],
+            image_id_size, image_id, created, size, info['Os'], info['Architecture']))
 
 
 def main():
     parser = argparse.ArgumentParser(usage=usage, add_help=False)
-    # TODO: --digests
     parser.add_argument('-c', '--cert')
     parser.add_argument('-k', '--key')
     parser.add_argument('-p', '--pass')
     parser.add_argument('-u', '--user')
+    parser.add_argument('--digests', action='store_true')
     parser.add_argument('--no-trunc', action='store_false')
     parser.add_argument('-r', '--reverse', action='store_false')
     parser.add_argument('-s', '--size', action='store_true')
@@ -700,7 +705,10 @@ def main():
     else:
         image_id_size = 75
 
-    print("%-*s %-*s %-30s %-15s %s" % (cols, "Image", image_id_size, "Id", "Created on", "Compressed Size", "Platform"))
+    if args.digests:
+        print("%-*s %-75s%-*s%-30s %-15s %s" % (cols, "Image", "Digest", image_id_size, "Id", "Created on", "Compressed Size", "Platform"))
+    else:
+        print("%-*s %-*s%-30s %-15s %s" % (cols, "Image", image_id_size, "Id", "Created on", "Compressed Size", "Platform"))
 
     info = {}
 
