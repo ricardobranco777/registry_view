@@ -488,7 +488,7 @@ def pretty_size(size):
     units = (' ', 'K', 'M', 'G', 'T')
     for n in range(4, -1, -1):
         if size > 1024**n:
-            return "%.2f %cB" % (float(size) / 1024**n, units[n])
+            return "%.2f%cB" % (float(size) / 1024**n, units[n])
 
 
 # Converts date/time string in ISO-8601 format to date(1)
