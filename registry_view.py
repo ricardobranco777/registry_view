@@ -19,12 +19,10 @@ import re
 import sys
 
 from calendar import timegm
-from time import localtime, sleep, strptime, strftime
+from time import localtime, strptime, strftime
 from getpass import getpass
-from functools import partial
 from urllib.parse import urlencode
 from io import BytesIO
-import shutil
 
 try:
     import pycurl
