@@ -215,9 +215,9 @@ class DockerRegistryECR:
         except KeyError:
             pass
         if digest is None:
-            imageIds=[{'imageTag': tag}]
+            imageIds = [{'imageTag': tag}]
         else:
-            imageIds=[{'imageDigest': digest}]
+            imageIds = [{'imageDigest': digest}]
         try:
             data = self._c.describe_images(registryId=self._registryId, repositoryName=repo, imageIds=imageIds)
         except (self.BotoCoreError, self.ClientError) as e:
@@ -229,9 +229,9 @@ class DockerRegistryECR:
     def get_manifest(self, repo, tag, version, digest=None):
         """Returns the image manifest as a dictionary"""
         if digest is None:
-            imageIds=[{'imageTag': tag}]
+            imageIds = [{'imageTag': tag}]
         else:
-            imageIds=[{'imageDigest': digest}]
+            imageIds = [{'imageDigest': digest}]
         data = self._c.batch_get_image(
             registryId=self._registryId, repositoryName=repo, imageIds=imageIds,
             acceptedMediaTypes=["application/vnd.docker.distribution.manifest.v%d+json" % version]
@@ -324,8 +324,7 @@ class DockerRegistryV2:
                 except ValueError:
                     if http_code == 200:
                         return body
-                    else:
-                        raise DockerRegistryError(body.strip())
+                    raise DockerRegistryError(body.strip())
                 if 'errors' in data:
                     if 'message' in data['errors'][0]:
                         raise DockerRegistryError(data['errors'][0]['message'])
@@ -338,7 +337,7 @@ class DockerRegistryV2:
     def _check_registry(self):
         """Checks for a valid Docker Registry"""
         body = self._get("")
-        if body == {} or body == "":
+        if not body:
             return
         http_code = self._c.get_http_code()
         if http_code == 404:
@@ -383,9 +382,8 @@ class DockerRegistryV2:
         """Returns a list of repositories"""
         if self._aws_ecr is not None:
             return self._aws_ecr.get_repositories()
-        else:
-            data = self._get("_catalog")
-            repositories = data['repositories'] + self._get_paginated('repositories')
+        data = self._get("_catalog")
+        repositories = data['repositories'] + self._get_paginated('repositories')
         repositories.sort()
         return repositories
 
@@ -393,9 +391,8 @@ class DockerRegistryV2:
         """Returns a list of tags for the specified repository"""
         if self._aws_ecr is not None:
             return self._aws_ecr.get_tags(repo)
-        else:
-            data = self._get(repo + "/tags/list")
-            tags = data['tags'] + self._get_paginated('tags')
+        data = self._get(repo + "/tags/list")
+        tags = data['tags'] + self._get_paginated('tags')
         tags.sort()
         return tags
 
@@ -441,7 +438,6 @@ class DockerRegistryV2:
             return info
         else:
             print("ERROR: Unsupported media type: %s", manifest['mediaType'], file=sys.stderr)
-            return {}
             sys.exit(1)
         # Calculate compressed size
         try:
@@ -454,14 +450,12 @@ class DockerRegistryV2:
     def get_image_history(self, repo, tag, digest=None):
         """Returns a list containing the image history (layers)"""
         manifest = self.get_manifest(repo, tag, 1, digest)
-        if manifest['schemaVersion'] == 1:
-            history = [
-                " ".join(json.loads(item['v1Compatibility'])['container_config']['Cmd'])
-                for item in reversed(manifest['history'])
-            ]
-            return history
-        else:
+        if manifest['schemaVersion'] != 1:
             return []
+        return [
+            " ".join(json.loads( item['v1Compatibility'])['container_config']['Cmd'])
+                for item in reversed(manifest['history'])
+        ]
 
 
 # Converts a size in bytes to a string in KB, MB, GB or TB
@@ -523,8 +517,8 @@ def registry_error(error):
 
 
 # Print image history
-def print_history(history, os):
-    if os == "windows":
+def print_history(history, os_):
+    if os_ == "windows":
         shell = 'cmd /S /C'
     else:
         shell = '/bin/sh -c'
@@ -669,8 +663,8 @@ def main():
             registry_error(error)
         if not isinstance(info, list):
             info = [info]
-        for i in range(len(info)):
-            print_image_info(reg, repo, tag, info[i])
+        for _, item in enumerate(info):
+            print_image_info(reg, repo, tag, item)
         sys.exit(0)
 
     #
@@ -685,7 +679,7 @@ def main():
     info = {}
     repos = reg.get_repositories()
     global cols
-    cols = len(max(repos, key=lambda k: len(k))) + 15
+    cols = len(max(repos, key=len)) + 15
 
     if args.digests:
         print("%-*s %-75s%-*s%-30s %-15s %s" % (cols, "Image", "Digest", image_id_size, "Id", "Created on", "Compressed Size", "Platform"))
@@ -709,9 +703,9 @@ def main():
                 image_info = reg.get_image_info(repo, tag)
                 if not isinstance(image_info, list):
                     image_info = [image_info]
-                for i in range(len(image_info)):
-                    key = image_info[i]['Digest']
-                    info[key] = image_info[i]
+                for _, item in enumerate(image_info):
+                    key = item['Digest']
+                    info[key] = item
                     info[key]['Repo'] = repo
                     info[key]['Tag'] = tag
             except DockerRegistryError as error:
