@@ -30,10 +30,10 @@ except ImportError:
     print('ERROR: Please install PyCurl', file=sys.stderr)
     sys.exit(1)
 
-progname = os.path.basename(sys.argv[0])
-version = "1.24"
+PROGNAME = os.path.basename(sys.argv[0])
+VERSION = "1.24"
 
-usage = "\rUsage: " + progname + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
+USAGE = "\rUsage: " + PROGNAME + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
         -c, --cert CERT         Client certificate file name
         -k, --key  KEY          Client private key file name
@@ -50,19 +50,34 @@ Options:
 Note: Default PORT is 443. You must prepend "http://" to REGISTRY if running on plain HTTP.
 """
 
+ARGS = None
+COLS = 0
+
 os.environ['LC_ALL'] = 'C.UTF-8'
 
 
 # Debug function used to mimic curl's debug output
-def debug_function(t, m):
-    curl_prefix = {pycurl.INFOTYPE_TEXT: '* ',
-                   pycurl.INFOTYPE_HEADER_IN: '< ', pycurl.INFOTYPE_HEADER_OUT: '> ',
-                   pycurl.INFOTYPE_DATA_IN: '', pycurl.INFOTYPE_DATA_OUT: ''}
+def debug_function(infotype, message):
+    curl_prefix = {
+        pycurl.INFOTYPE_TEXT: '* ',
+        pycurl.INFOTYPE_HEADER_IN: '< ',
+        pycurl.INFOTYPE_HEADER_OUT: '> ',
+        pycurl.INFOTYPE_DATA_IN: '',
+        pycurl.INFOTYPE_DATA_OUT: ''
+    }
     # Ignore SSL info types
-    if t not in curl_prefix:
+    if infotype not in curl_prefix:
         return
-    m = m.decode('iso-8859-1').rstrip()
-    print(curl_prefix[t] + m)
+    # Strip trailing whitespace
+    message = message.decode('iso-8859-1').rstrip()
+    print(curl_prefix[infotype] + message)
+
+
+def error(msg, bye=True):
+    '''Prints an error message and optionally exit with a status code of 1'''
+    print("ERROR: " + str(msg), file=sys.stderr)
+    if bye:
+        sys.exit(1)
 
 
 class Curl:
@@ -71,9 +86,16 @@ class Curl:
     def __init__(self, **opts):
         """Initializes a pycurl handle"""
         self.c = pycurl.Curl()
-        curlopts = [('cert', pycurl.SSLCERT), ('key', pycurl.SSLKEY), ('verbose', pycurl.VERBOSE)]
+        curlopts = [
+            ('cert', pycurl.SSLCERT),
+            ('key', pycurl.SSLKEY),
+            ('verbose', pycurl.VERBOSE)
+        ]
+        # Compatibility with older versions of PyCurl
         if hasattr(pycurl, 'KEYPASSWD'):
-            curlopts += [('pass', pycurl.KEYPASSWD)]    # Option added to PyCurl 7.21.5
+            curlopts += [('pass', pycurl.KEYPASSWD)]
+        elif hasattr(pycurl, 'SSLKEYPASSWD'):
+            curlopts += [('pass', pycurl.SSLKEYPASSWD)]
         else:
             curlopts += [('pass', pycurl.SSLCERTPASSWD)]
         for opt, curlopt in curlopts:
@@ -83,7 +105,9 @@ class Curl:
         if opts['verbose'] is not None and opts['verbose'] > 1:
             self.c.setopt(pycurl.DEBUGFUNCTION, debug_function)
         self.c.setopt(pycurl.HEADERFUNCTION, self._header_function)
-        self.c.setopt(pycurl.USERAGENT, '%s/%s %s' % (progname, version, pycurl.version))
+        self.c.setopt(
+            pycurl.USERAGENT, '%s/%s %s' % (PROGNAME, VERSION, pycurl.version)
+        )
         self.buf = BytesIO()
         try:
             self.c.setopt(pycurl.WRITE, self.buf)
@@ -95,7 +119,8 @@ class Curl:
         self.buf.close()
         self.c.close()
 
-    # Adapted from https://github.com/pycurl/pycurl/blob/master/examples/quickstart/response_headers.py
+    # Adapted from:
+    # https://github.com/pycurl/pycurl/blob/master/examples/quickstart/response_headers.py
     def _header_function(self, header_line):
         """Gets the HTTP headers from a response"""
         # HTTP standard specifies that headers are encoded in iso-8859-1
@@ -108,9 +133,7 @@ class Curl:
         # Break the header line into header name and value.
         name, value = header_line.split(':', 1)
         # Remove whitespace that may be present.
-        name = name.strip()
-        value = value.strip()
-        self.headers[name] = value
+        self.headers[name.strip()] = value.strip()
 
     def get(self, url, headers=None, auth=None):
         """Makes the HTTP GET request with optional headers.
@@ -173,8 +196,7 @@ class DockerRegistryECR:
             import boto3
             from botocore.exceptions import BotoCoreError, ClientError
         except ImportError:
-            print("ERROR: Install the boto3 Python library to get data from AWS ECR", file=sys.stderr)
-            sys.exit(1)
+            error("Please install boto3")
         self.BotoCoreError, self.ClientError = BotoCoreError, ClientError
         self._c = boto3.client('ecr')
         self._registryId = re.findall(r"^(?:https?://)?(.*?)\.", registry)[0]
@@ -185,27 +207,34 @@ class DockerRegistryECR:
         try:
             repositories = [
                 item['repositoryName']
-                for response in paginator.paginate(registryId=self._registryId)
-                for item in response['repositories']
+                for page in paginator.paginate(registryId=self._registryId)
+                for item in page['repositories']
             ]
-        except (self.BotoCoreError, self.ClientError) as e:
-            print("ERROR: " + str(e), file=sys.stderr)
-            sys.exit(1)
+        except (self.BotoCoreError, self.ClientError) as err:
+            error(err)
         return repositories
 
     def get_tags(self, repo):
         """Returns a list of tags for the specified repository"""
         tags = []
         self._cache = {repo: {}}
-        keys = (('Digest', 'imageDigest'), ('CompressedSize', 'imageSizeInBytes'))
+        keys = (
+            ('Digest', 'imageDigest'),
+            ('CompressedSize', 'imageSizeInBytes')
+        )
         image_filter = {'tagStatus': 'TAGGED'}
         paginator = self._c.get_paginator('describe_images')
-        # NOTE: filter is a Python function and boto3 shouldn't use this as argument
-        for response in paginator.paginate(registryId=self._registryId, repositoryName=repo, filter=image_filter):
-            for item in response['imageDetails']:
+        for page in paginator.paginate(
+                registryId=self._registryId,
+                repositoryName=repo,
+                filter=image_filter
+        ):
+            for item in page['imageDetails']:
                 tags += item['imageTags']
                 for tag in item['imageTags']:
-                    self._cache[repo][tag] = {k1: item[k2] for (k1, k2) in keys}
+                    self._cache[repo][tag] = {
+                        k1: item[k2] for (k1, k2) in keys
+                    }
         return tags
 
     def get_image_info(self, repo, tag, digest=None):
@@ -219,11 +248,16 @@ class DockerRegistryECR:
         else:
             imageIds = [{'imageDigest': digest}]
         try:
-            data = self._c.describe_images(registryId=self._registryId, repositoryName=repo, imageIds=imageIds)
-        except (self.BotoCoreError, self.ClientError) as e:
-            raise DockerRegistryError(e)
+            data = self._c.describe_images(
+                registryId=self._registryId,
+                repositoryName=repo,
+                imageIds=imageIds
+            )
+        except (self.BotoCoreError, self.ClientError) as err:
+            raise DockerRegistryError(err)
         data = data['imageDetails'][0]
-        keys = (('Digest', 'imageDigest'), ('CompressedSize', 'imageSizeInBytes'))
+        keys = (('Digest', 'imageDigest'),
+                ('CompressedSize', 'imageSizeInBytes'))
         return {k1: data[k2] for (k1, k2) in keys}
 
     def get_manifest(self, repo, tag, version, digest=None):
@@ -233,8 +267,12 @@ class DockerRegistryECR:
         else:
             imageIds = [{'imageDigest': digest}]
         data = self._c.batch_get_image(
-            registryId=self._registryId, repositoryName=repo, imageIds=imageIds,
-            acceptedMediaTypes=["application/vnd.docker.distribution.manifest.v%d+json" % version]
+            registryId=self._registryId,
+            repositoryName=repo,
+            imageIds=imageIds,
+            acceptedMediaTypes=[
+                "application/vnd.docker.distribution.manifest.v%d+json" % version
+            ]
         )
         return json.loads(data['images'][0]['imageManifest'])
 
@@ -249,7 +287,7 @@ class DockerRegistryV2:
 
     _aws_ecr = None
     _basic_auth = ""
-    _headers = [] # XXX: Document
+    _headers = []  # XXX: Document
 
     def __init__(self, registry, **args):
         """Get a Curl handle and checks the type and availability of the Registry"""
@@ -259,7 +297,10 @@ class DockerRegistryV2:
         if not re.match("https?://", self._registry):
             self._registry = "https://" + self._registry
         # Check for AWS EC2 Container Registry
-        if re.match(r"(?:https?://)?.*?\.dkr\.ecr\..*?\.amazonaws\.com(?::[0-9]+)?$", self._registry):
+        if re.match(
+                r"(?:https?://)?.*?\.amazonaws\.com(?::[0-9]+)?$",
+                self._registry
+        ):
             self._aws_ecr = DockerRegistryECR(self._registry)
             return
         # Set credentials if specified or set in ~/.docker/config.json
@@ -314,8 +355,7 @@ class DockerRegistryV2:
                 elif auth_method.startswith('Bearer '):
                     headers += self._auth_token(auth_method)
                 else:
-                    print('ERROR: Unsupported authentication method: ' + auth_method, file=sys.stderr)
-                    sys.exit(1)
+                    error("Unsupported authentication method: " + auth_method)
             else:
                 if not self._headers and self._basic_auth and tries == 1:
                     self._headers = self._auth_basic()
@@ -341,12 +381,10 @@ class DockerRegistryV2:
             return
         http_code = self._c.get_http_code()
         if http_code == 404:
-            error = 'Invalid v2 Docker Registry: ' + self._registry
-        else:
-            if not self._c.get_headers('HTTP_STATUS'):
-                error = "Invalid HTTP server"
-        print('ERROR: ' + error, file=sys.stderr)
-        sys.exit(1)
+            err = 'Invalid v2 Docker Registry: ' + self._registry
+        elif not self._c.get_headers('HTTP_STATUS'):
+            err = "Invalid HTTP server"
+        error(err)
 
     def _get_creds(self):
         """Gets the credentials from ~/.docker/config.json"""
@@ -358,15 +396,16 @@ class DockerRegistryV2:
             if not os.path.exists(config_file):
                 config_file = os.path.expanduser(os.path.join("~", ".dockercfg"))
         if not os.path.exists(config_file):
-            return
-        with open(os.path.expanduser(config_file), "r") as f:
-            config = json.load(f)
+            return None
+        with open(os.path.expanduser(config_file), "r") as file:
+            config = json.load(file)
         try:
             return config['auths'][re.sub("^https?://", "", self._registry)]['auth']
         except KeyError:
             pass
+        return None
 
-    def _get_paginated(self, s):
+    def _get_paginated(self, string):
         """Get paginated results when the Registry is too large"""
         elements = []
         while True:
@@ -375,7 +414,7 @@ class DockerRegistryV2:
                 break
             url = re.findall('</v2/(.*)>; rel="next"', url)[0]
             data = self._get(url)
-            elements += data[s]
+            elements += data[string]
         return elements
 
     def get_repositories(self):
@@ -383,9 +422,9 @@ class DockerRegistryV2:
         if self._aws_ecr is not None:
             return self._aws_ecr.get_repositories()
         data = self._get("_catalog")
-        repositories = data['repositories'] + self._get_paginated('repositories')
-        repositories.sort()
-        return repositories
+        repos = data['repositories'] + self._get_paginated('repositories')
+        repos.sort()
+        return repos
 
     def get_tags(self, repo):
         """Returns a list of tags for the specified repository"""
@@ -400,11 +439,13 @@ class DockerRegistryV2:
         """Returns the image manifest as a dictionary. The schema versions must be 1 or 2"""
         if self._aws_ecr is not None:
             return self._aws_ecr.get_manifest(repo, tag, version, digest)
-        headers = ["Accept: application/vnd.docker.distribution.manifest.v%d+json" % version]
+        headers = [
+            "Accept: application/vnd.docker.distribution.manifest.v%d+json" % version
+        ]
         if digest is not None:
-            return self._get(repo + "/manifests/" + digest, headers=headers)
+            return self._get("%s/manifests/%s" % (repo, digest), headers=headers)
         else:
-            return self._get(repo + "/manifests/" + tag, headers=headers)
+            return self._get("%s/manifests/%s" % (repo, tag), headers=headers)
 
     # TODO: Cache result for schema v1 for get_image_history()
     def get_image_info(self, repo, tag, digest=None):
@@ -415,9 +456,15 @@ class DockerRegistryV2:
         manifest = self.get_manifest(repo, tag, 1, digest)
         if manifest['schemaVersion'] == 1:
             data = json.loads(manifest['history'][0]['v1Compatibility'])
-            info.update({key.title(): data[key] for key in ('architecture', 'created', 'docker_version', 'os')})
-            keys = ('Cmd', 'Entrypoint', 'Env', 'ExposedPorts', 'Healthcheck', 'Labels',
-                    'OnBuild', 'Shell', 'StopSignal', 'User', 'Volumes', 'WorkingDir')
+            info.update({
+                key.title(): data[key]
+                for key in ('architecture', 'created', 'docker_version', 'os')
+            })
+            keys = (
+                'Cmd', 'Entrypoint', 'Env', 'ExposedPorts',
+                'Healthcheck', 'Labels', 'OnBuild', 'Shell',
+                'StopSignal', 'User', 'Volumes', 'WorkingDir'
+            )
             info.update({key: data['config'].get(key, "") for key in keys})
         if self._aws_ecr is not None:
             return info
@@ -431,20 +478,28 @@ class DockerRegistryV2:
         elif manifest['mediaType'] == "application/vnd.docker.distribution.manifest.list.v2+json":
             # Fat manifest (multi-arch)
             info = []
-            for i in range(len(manifest['manifests'])):
-                info.append(self.get_image_info(repo, tag=None, digest=manifest['manifests'][i]['digest']))
-                info[i]['Architecture'] = manifest['manifests'][i]['platform']['architecture']
-                info[i]['Os'] = manifest['manifests'][i]['platform']['os']
+            for i, manifest in enumerate(manifest['manifests']):
+                info.append(
+                    self.get_image_info(
+                        repo,
+                        tag=None,
+                        digest=manifest['digest'])
+                )
+                info[i]['Architecture'] = manifest['platform']['architecture']
+                info[i]['Os'] = manifest['platform']['os']
             return info
         else:
-            print("ERROR: Unsupported media type: %s", manifest['mediaType'], file=sys.stderr)
-            sys.exit(1)
+            error("Unsupported media type: %s", manifest['mediaType'])
         # Calculate compressed size
         try:
-            info['CompressedSize'] = sum([item['size'] for item in manifest['layers']])
+            info['CompressedSize'] = sum(
+                [item['size'] for item in manifest['layers']]
+            )
         except KeyError:
             pass
-        info.update({key: "-" for key in ("Architecture", "Os") if key not in info})
+        info.update(
+            {key: "-" for key in ("Architecture", "Os") if key not in info}
+        )
         return info
 
     def get_image_history(self, repo, tag, digest=None):
@@ -453,33 +508,35 @@ class DockerRegistryV2:
         if manifest['schemaVersion'] != 1:
             return []
         return [
-            " ".join(json.loads( item['v1Compatibility'])['container_config']['Cmd'])
-                for item in reversed(manifest['history'])
+            " ".join(json.loads(item['v1Compatibility'])['container_config']['Cmd'])
+            for item in reversed(manifest['history'])
         ]
 
 
 # Converts a size in bytes to a string in KB, MB, GB or TB
 def pretty_size(size):
     units = (' ', 'K', 'M', 'G', 'T')
-    for n in range(4, -1, -1):
-        if size > 1024**n:
-            return "%.2f%cB" % (float(size) / 1024**n, units[n])
+    for i in range(4, -1, -1):
+        if size > 1024**i:
+            return "%.2f%cB" % (float(size) / 1024**i, units[i])
 
 
 # Converts date/time string in ISO-8601 format to date(1)
-def pretty_date(ts):
-    fmt = "%a %b %d %H:%M:%S %Z %Y"
-    return strftime(fmt, localtime(timegm(strptime(re.sub(r"\.\d+Z$", "GMT", ts), '%Y-%m-%dT%H:%M:%S%Z'))))
+def pretty_date(time_string):
+    return strftime(
+        "%a %b %d %H:%M:%S %Z %Y",
+        localtime(timegm(strptime(re.sub(r"\.\d+Z$", "GMT", time_string),
+                                  '%Y-%m-%dT%H:%M:%S%Z')))
+    )
 
 
 # Converts nanoseconds into a string that can be parsed by Go's time.ParseDuration()
 def pretty_time(nanoseconds):
     microseconds_ns = 1e3
     milliseconds_ns = 1e3 * microseconds_ns
-    seconds_ns = 1e3 *milliseconds_ns
+    seconds_ns = 1e3 * milliseconds_ns
     minutes_ns = 60 * seconds_ns
     hours_ns = 60 * minutes_ns
-
     nanoseconds = int(nanoseconds)
     if not nanoseconds:
         return "0"
@@ -506,14 +563,7 @@ def pretty_time(nanoseconds):
         nanoseconds -= microseconds * microseconds_ns
     if nanoseconds:
         time_string += "%dns" % nanoseconds
-
     return time_string
-
-
-# Print registry error
-def registry_error(error):
-    print("ERROR: %s:" % error, file=sys.stderr)
-    sys.exit(1)
 
 
 # Print image history
@@ -525,13 +575,16 @@ def print_history(history, os_):
     for i, layer in enumerate(history, 1):
         # The format of the SHELL command in the manifest is:
         # "/bin/bash -c #(nop)  SHELL [/bin/bash -c]" when 'SHELL ["/bin/bash", "-c"]' is used in the Dockerfile
-        m = re.match(r"(.*) #\(nop\)  SHELL \[(.*)\]$", layer)
-        if m and len(m.groups()) == 2 and m.group(1) == m.group(2):
-            shell = m.group(1)
+        match = re.match(r"(.*) #\(nop\)  SHELL \[(.*)\]$", layer)
+        if match and len(match.groups()) == 2 and match.group(1) == match.group(2):
+            shell = match.group(1)
         layer = re.sub('^' + shell + r' #\(nop\)', "", layer)
         layer = re.sub('^' + shell, "RUN", layer).lstrip()
         if layer.startswith('HEALTHCHECK &{["CMD-SHELL" '):
-            cmd, interval, timeout, start, retries = re.findall(r'^HEALTHCHECK &{\["CMD-SHELL" "(.*?)"] "(.*?)" "(.*?)" "(.*?)" \'\\x(.*)\'}$', layer)[0]
+            cmd, interval, timeout, start, retries = re.findall(
+                r'^HEALTHCHECK &{\["CMD-SHELL" "(.*?)"] "(.*?)" "(.*?)" "(.*?)" \'\\x(.*)\'}$',
+                layer
+            )[0]
             retries = str(int(retries, base=16))
             layer = "HEALTHCHECK"
             if interval != "0s":
@@ -552,7 +605,10 @@ def print_history(history, os_):
 def print_image_info(reg, repo, tag, info):
     if 'Env' in info:
         # Convert 'PATH=xxx foo=bar' into 'PATH="xxx" foo="bar"'
-        info["Env"] = [re.sub('([^=]+)=(.*)', r'\1="\2"', env.replace('"', r'\"')) for env in info["Env"]]
+        info["Env"] = [
+            re.sub('([^=]+)=(.*)', r'\1="\2"', env.replace('"', r'\"'))
+            for env in info["Env"]
+        ]
 
     keys = list(info)
     for key in sorted(keys):
@@ -577,7 +633,7 @@ def print_image_info(reg, repo, tag, info):
             if key in ('Env', 'ExposedPorts', 'Volumes'):
                 value = " ".join(sorted(value))
             elif value:
-                value = "[ '" + "".join("', '".join(item for item in value)) + "' ]"
+                value = "[ '" + "".join("', '".join(_ for _ in value)) + "' ]"
         if value is None or not value:
             value = ""
         print('%-15s\t%s' % (key.replace('_', ''), value))
@@ -585,32 +641,34 @@ def print_image_info(reg, repo, tag, info):
     # Print image history
     try:
         history = reg.get_image_history(repo, tag, info['Digest'])
-    except DockerRegistryError as error:
-        registry_error(error)
+    except DockerRegistryError as err:
+        error(err)
     print_history(history, info['Os'])
 
 
 def print_info(info):
-    image_id = info['Id']
-    if args.no_trunc:
-        image_id = image_id.replace("sha256:", "")[0:12]
-        image_id_size = 15
+    id_ = info['Id']
+    if ARGS.no_trunc:
+        id_ = id_.replace("sha256:", "")[0:12]
+        id_size = 15
     else:
-        image_id_size = 75
+        id_size = 75
     created = info.get('Created')
     created = pretty_date(created) if created else "-"
     size = info.get('CompressedSize')
     size = pretty_size(size) if size else "-"
-    if args.digests:
-        print("%-*s %-75s%-*s%-30s %-15s %s/%s" % (cols, info['Repo'] + ":" + info['Tag'], info['Digest'],
-            image_id_size, image_id, created, size, info['Os'], info['Architecture']))
+    if ARGS.digests:
+        print("%-*s %-75s%-*s%-30s %-15s %s/%s" % (
+            COLS, info['Repo'] + ":" + info['Tag'], info['Digest'],
+            id_size, id_, created, size, info['Os'], info['Architecture']))
     else:
-        print("%-*s %-*s%-30s %-15s %s/%s" % (cols, info['Repo'] + ":" + info['Tag'],
-            image_id_size, image_id, created, size, info['Os'], info['Architecture']))
+        print("%-*s %-*s%-30s %-15s %s/%s" % (
+            COLS, info['Repo'] + ":" + info['Tag'],
+            id_size, id_, created, size, info['Os'], info['Architecture']))
 
 
 def main():
-    parser = argparse.ArgumentParser(usage=usage, add_help=False)
+    parser = argparse.ArgumentParser(usage=USAGE, add_help=False)
     parser.add_argument('-c', '--cert')
     parser.add_argument('-k', '--key')
     parser.add_argument('-p', '--pass')
@@ -624,43 +682,43 @@ def main():
     parser.add_argument('-v', '--verbose', action='count')
     parser.add_argument('-V', '--version', action='store_true')
     parser.add_argument('image', nargs='?')
-    global args
-    args = parser.parse_args()
+    global ARGS
+    ARGS = parser.parse_args()
 
-    if args.help:
-        print('usage: ' + usage)
+    if ARGS.help:
+        print('usage: ' + USAGE)
         sys.exit(0)
-    elif args.version:
-        print(progname + " " + version + " " + pycurl.version)
+    elif ARGS.version:
+        print("%s %s %s" % (PROGNAME, VERSION, pycurl.version))
         sys.exit(0)
-    elif not args.image:
-        print('usage: ' + usage, file=sys.stderr)
+    elif not ARGS.image:
+        print('usage: ' + USAGE, file=sys.stderr)
         sys.exit(1)
 
-    m = re.search('^((?:https?://)?[^:/]+(?::[0-9]+)?)/*(.*)', args.image)
+    match = re.search('^((?:https?://)?[^:/]+(?::[0-9]+)?)/*(.*)', ARGS.image)
     try:
-        registry, args.image = m.group(1), m.group(2)
+        registry, ARGS.image = match.group(1), match.group(2)
     except AttributeError:
-        print('usage: ' + usage, file=sys.stderr)
+        print('usage: ' + USAGE, file=sys.stderr)
         sys.exit(1)
 
-    reg = DockerRegistryV2(registry, **vars(args))
+    reg = DockerRegistryV2(registry, **vars(ARGS))
 
     #
     # Print information for a specific image
     #
-    if args.image and not args.image.endswith('*'):
+    if ARGS.image and not ARGS.image.endswith('*'):
         tag = digest = None
-        if '@' in args.image:
-            repo, digest = args.image.rsplit('@', 1)
-        elif ':' in args.image:
-            repo, tag = args.image.rsplit(':', 1)
+        if '@' in ARGS.image:
+            repo, digest = ARGS.image.rsplit('@', 1)
+        elif ':' in ARGS.image:
+            repo, tag = ARGS.image.rsplit(':', 1)
         else:
-            repo, tag = args.image, "latest"
+            repo, tag = ARGS.image, "latest"
         try:
             info = reg.get_image_info(repo, tag, digest)
-        except DockerRegistryError as error:
-            registry_error(error)
+        except DockerRegistryError as err:
+            error(err)
         if not isinstance(info, list):
             info = [info]
         for _, item in enumerate(info):
@@ -671,33 +729,42 @@ def main():
     # Print information on all images
     #
 
-    if args.no_trunc:
-        image_id_size = 15
+    if ARGS.no_trunc:
+        id_size = 15
     else:
-        image_id_size = 75
+        id_size = 75
 
     info = {}
     repos = reg.get_repositories()
-    global cols
-    cols = len(max(repos, key=len)) + 15
+    global COLS
+    COLS = len(max(repos, key=len)) + 15
 
-    if args.digests:
-        print("%-*s %-75s%-*s%-30s %-15s %s" % (cols, "Image", "Digest", image_id_size, "Id", "Created on", "Compressed Size", "Platform"))
+    if ARGS.digests:
+        print("%-*s %-75s%-*s%-30s %-15s %s" % (
+            COLS, "Image", "Digest", id_size, "Id", "Created on",
+            "Compressed Size", "Platform"))
     else:
-        print("%-*s %-*s%-30s %-15s %s" % (cols, "Image", image_id_size, "Id", "Created on", "Compressed Size", "Platform"))
+        print("%-*s %-*s%-30s %-15s %s" % (
+            COLS, "Image", id_size, "Id", "Created on",
+            "Compressed Size", "Platform"))
 
+    glob_repo = ARGS.image.split(':', 1)[0].rstrip('*')
+    if ':' in ARGS.image:
+        glob_tag = ARGS.image.split(':', 1)[1].rstrip('*')
+    else:
+        glob_tag = ""
     for repo in repos:
-        if args.image and not repo.startswith(args.image.split(':', 1)[0].rstrip('*')):
+        if ARGS.image and not repo.startswith(glob_repo):
             continue
         try:
             tags = reg.get_tags(repo)
-        except DockerRegistryError as error:
-            print("%-*s\tERROR: %s" % (cols, repo, error))
+        except DockerRegistryError as err:
+            print("%-*s\tERROR: %s" % (COLS, repo, err))
             continue
-        if not (args.size or args.time):
+        if not (ARGS.size or ARGS.time):
             info = {}
         for tag in tags:
-            if ':' in args.image and not tag.startswith(args.image.split(':', 1)[1].rstrip('*')):
+            if glob_tag and not tag.startswith(glob_tag):
                 continue
             try:
                 image_info = reg.get_image_info(repo, tag)
@@ -708,20 +775,32 @@ def main():
                     info[key] = item
                     info[key]['Repo'] = repo
                     info[key]['Tag'] = tag
-            except DockerRegistryError as error:
-                print("%-*s\tERROR: %s" % (cols, repo + ":" + tag, error))
+            except DockerRegistryError as err:
+                print("%-*s\tERROR: %s" % (COLS, repo + ":" + tag, err))
                 continue
-        if args.size or args.time:
+        if ARGS.size or ARGS.time:
             continue
-        for image in sorted(info, key=lambda k: (info[k].get('Created'), k), reverse=not args.reverse):
+        for image in sorted(
+                info,
+                key=lambda k: (info[k].get('Created'), k),
+                reverse=not ARGS.reverse
+        ):
             print_info(info[image])
 
     # Show output sorted by size or time
     images = []
-    if args.size:
-        images = sorted(info, key=lambda k: info[k].get('CompressedSize', 0), reverse=args.reverse)
-    elif args.time:
-        images = sorted(info, key=lambda k: info[k].get('Created', 0), reverse=args.reverse)
+    if ARGS.size:
+        images = sorted(
+            info,
+            key=lambda k: info[k].get('CompressedSize', 0),
+            reverse=ARGS.reverse
+        )
+    elif ARGS.time:
+        images = sorted(
+            info,
+            key=lambda k: info[k].get('Created', 0),
+            reverse=ARGS.reverse
+        )
     for image in images:
         print_info(info[image])
 
