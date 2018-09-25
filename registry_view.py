@@ -721,7 +721,7 @@ def main():
             error(err)
         if not isinstance(info, list):
             info = [info]
-        for _, item in enumerate(info):
+        for item in info:
             print_image_info(reg, repo, tag, item)
         sys.exit(0)
 
@@ -770,7 +770,7 @@ def main():
                 image_info = reg.get_image_info(repo, tag)
                 if not isinstance(image_info, list):
                     image_info = [image_info]
-                for _, item in enumerate(image_info):
+                for item in image_info:
                     key = item['Digest']
                     info[key] = item
                     info[key]['Repo'] = repo
