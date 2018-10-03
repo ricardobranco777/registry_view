@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.24 by Ricardo Branco
+# v1.24.1 by Ricardo Branco
 #
 # MIT License
 
@@ -31,7 +31,7 @@ except ImportError:
     sys.exit(1)
 
 PROGNAME = os.path.basename(sys.argv[0])
-VERSION = "1.24"
+VERSION = "1.24.1"
 
 USAGE = "\rUsage: " + PROGNAME + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -133,7 +133,7 @@ class Curl:
         # Break the header line into header name and value.
         name, value = header_line.split(':', 1)
         # Remove whitespace that may be present.
-        self.headers[name.strip()] = value.strip()
+        self.headers[name.strip().lower()] = value.strip()
 
     def get(self, url, headers=None, auth=None):
         """Makes the HTTP GET request with optional headers.
@@ -349,7 +349,7 @@ class DockerRegistryV2:
             http_code = self._c.get_http_code()
             if http_code == 401 and tries > 0:
                 headers = headers[:]
-                auth_method = self._c.get_headers('WWW-Authenticate')
+                auth_method = self._c.get_headers('www-authenticate')
                 if auth_method is None or auth_method.startswith('Basic '):
                     headers += self._auth_basic()
                 elif auth_method.startswith('Bearer '):
@@ -409,7 +409,7 @@ class DockerRegistryV2:
         """Get paginated results when the Registry is too large"""
         elements = []
         while True:
-            url = self._c.get_headers('Link')
+            url = self._c.get_headers('link')
             if url is None:
                 break
             url = re.findall('</v2/(.*)>; rel="next"', url)[0]
@@ -473,7 +473,7 @@ class DockerRegistryV2:
             manifest = self.get_manifest(repo, tag, 2, digest)
         if manifest['mediaType'] == "application/vnd.docker.distribution.manifest.v2+json":
             # Single manifest
-            info['Digest'] = self._c.get_headers('Docker-Content-Digest')
+            info['Digest'] = self._c.get_headers('docker-content-digest')
             info['Id'] = manifest['config']['digest']
         elif manifest['mediaType'] == "application/vnd.docker.distribution.manifest.list.v2+json":
             # Fat manifest (multi-arch)
