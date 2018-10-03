@@ -7,7 +7,7 @@
 #
 # Reference: https://github.com/docker/distribution/blob/master/docs/spec/api.md
 #
-# v1.24.1 by Ricardo Branco
+# v1.24.2 by Ricardo Branco
 #
 # MIT License
 
@@ -31,7 +31,7 @@ except ImportError:
     sys.exit(1)
 
 PROGNAME = os.path.basename(sys.argv[0])
-VERSION = "1.24.1"
+VERSION = "1.24.2"
 
 USAGE = "\rUsage: " + PROGNAME + """ [OPTIONS]... REGISTRY[:PORT][/REPOSITORY[:TAG]]
 Options:
@@ -439,9 +439,16 @@ class DockerRegistryV2:
         """Returns the image manifest as a dictionary. The schema versions must be 1 or 2"""
         if self._aws_ecr is not None:
             return self._aws_ecr.get_manifest(repo, tag, version, digest)
-        headers = [
-            "Accept: application/vnd.docker.distribution.manifest.v%d+json" % version
-        ]
+        headers = []
+        if version == 1:
+            headers = [
+                "Accept: application/vnd.docker.distribution.manifest.v1+json",
+                "Accept: application/vnd.docker.distribution.manifest.list.v2+json",
+            ]
+        else:
+            headers += [
+                "Accept: application/vnd.docker.distribution.manifest.v2+json"
+            ]
         if digest is not None:
             return self._get("%s/manifests/%s" % (repo, digest), headers=headers)
         else:
@@ -468,7 +475,6 @@ class DockerRegistryV2:
             info.update({key: data['config'].get(key, "") for key in keys})
         if self._aws_ecr is not None:
             return info
-        # Some registries don't return schema v1 but schema v2.
         if manifest['schemaVersion'] != 2:
             manifest = self.get_manifest(repo, tag, 2, digest)
         if manifest['mediaType'] == "application/vnd.docker.distribution.manifest.v2+json":
