@@ -311,17 +311,17 @@ class DockerRegistryV2:
         else:
             self._basic_auth = self._get_creds()
         # Check Registry v2
-        self._check_registry()
+        #self._check_registry()
 
     def _auth_basic(self):
         """Returns the 'Authorization' header for HTTP Basic Authentication"""
         if not self._basic_auth:
             userpass = input('Username: ') + ":" + getpass('Password: ')
             self._basic_auth = str(base64.b64encode(userpass.encode()).decode('ascii'))
-        return ['Authorization: Basic ' + self._basic_auth]
+        #return ['Authorization: Basic ' + self._basic_auth]
 
     # Reference: https://docs.docker.com/registry/spec/auth/
-    def _auth_token(self, response_header, use_post=True):
+    def _auth_token(self, response_header, use_post=False):
         """Returns the token from the response_header"""
         fields = {k: v for (k, v) in re.findall(',?([^=]+)="([^"]+)"', response_header)}
         url = fields['Bearer realm']
@@ -336,29 +336,32 @@ class DockerRegistryV2:
                 use_post = False
         if not use_post:
             url += '?' + fields
-            token = json.loads(self._c.get(url, auth=self._auth_basic()))['token']
-        return ['Authorization: Bearer ' + token]
+            token = json.loads(self._c.get(url))['token']
+        self._headers = ['Authorization: Bearer ' + token]
+        #return ['Authorization: Bearer ' + token]
 
     def _get(self, url, headers=None):
         """Gets the specified url within the Docker Registry with optional headers"""
         if headers is None:
             headers = []
         tries = 1
+        if not url.startswith("https://"):
+            url = self._registry + "/v2/" + url
         while True:
-            body = self._c.get(self._registry + "/v2/" + url, self._headers + headers)
+            body = self._c.get(url, self._headers + headers)
             http_code = self._c.get_http_code()
             if http_code == 401 and tries > 0:
                 headers = headers[:]
                 auth_method = self._c.get_headers('www-authenticate')
                 if auth_method is None or auth_method.startswith('Basic '):
-                    headers += self._auth_basic()
+                    self._auth_basic()
                 elif auth_method.startswith('Bearer '):
-                    headers += self._auth_token(auth_method)
+                    self._auth_token(auth_method)
                 else:
                     error("Unsupported authentication method: " + auth_method)
             else:
-                if not self._headers and self._basic_auth and tries == 1:
-                    self._headers = self._auth_basic()
+                #if not self._headers and self._basic_auth and tries == 1:
+                #    self._headers = self._auth_basic()
                 try:
                     data = json.loads(body)
                 except ValueError:
