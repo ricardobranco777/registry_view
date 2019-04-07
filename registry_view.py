@@ -323,7 +323,10 @@ class DockerRegistryV2:
     # Reference: https://docs.docker.com/registry/spec/auth/
     def _auth_token(self, response_header, use_post=False):
         """Returns the token from the response_header"""
-        fields = {k: v for (k, v) in re.findall(',?([^=]+)="([^"]+)"', response_header)}
+        fields = {
+            k: v for (k, v) in re.findall(',?([^=]+)="([^"]+)"', response_header)
+            if k in ('Bearer realm', 'service', 'scope')
+        }
         url = fields['Bearer realm']
         del fields['Bearer realm']
         fields = urlencode(fields)
@@ -336,6 +339,7 @@ class DockerRegistryV2:
                 use_post = False
         if not use_post:
             url += '?' + fields
+            # TODO: 'access_token' is valid too
             token = json.loads(self._c.get(url))['token']
         self._headers = ['Authorization: Bearer ' + token]
         #return ['Authorization: Bearer ' + token]
